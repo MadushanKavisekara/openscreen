@@ -53,6 +53,11 @@ import {
 import { SettingsPanel } from "./SettingsPanel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import {
+	cloneAnnotationRegion,
+	getPastedAnnotationPosition,
+	spansOverlap,
+} from "./timelineClipboardUtils";
+import {
 	type AnnotationRegion,
 	type BlurData,
 	type CursorTelemetryPoint,
@@ -82,26 +87,6 @@ type TimelineClipboardItem =
 	| { kind: "speed"; region: SpeedRegion }
 	| { kind: "annotation"; region: AnnotationRegion }
 	| { kind: "blur"; region: AnnotationRegion };
-
-function cloneAnnotationRegion(region: AnnotationRegion): AnnotationRegion {
-	return {
-		...region,
-		position: { ...region.position },
-		size: { ...region.size },
-		style: { ...region.style },
-		figureData: region.figureData ? { ...region.figureData } : undefined,
-		blurData: region.blurData
-			? {
-					...region.blurData,
-					freehandPoints: region.blurData.freehandPoints?.map((point) => ({ ...point })),
-				}
-			: undefined,
-	};
-}
-
-function spansOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
-	return startA < endB && endA > startB;
-}
 
 export default function VideoEditor() {
 	const {
@@ -1105,11 +1090,43 @@ export default function VideoEditor() {
 			timelineClipboard.region.endMs - timelineClipboard.region.startMs,
 		);
 		const pastedDuration = Math.min(sourceDuration, totalMs);
-		const targetStart = Math.min(
-			Math.max(0, Math.round(currentTime * 1000)),
-			Math.max(0, totalMs - pastedDuration),
-		);
+		const currentTimeMs = Math.max(0, Math.round(currentTime * 1000));
+		const targetStart = Math.min(currentTimeMs, Math.max(0, totalMs - pastedDuration));
 		const targetEnd = Math.min(totalMs, targetStart + pastedDuration);
+
+		function clearTimelineSelection() {
+			setSelectedZoomId(null);
+			setSelectedTrimId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+			setSelectedSpeedId(null);
+		}
+
+		function pasteSpanRegion<T extends { id: string; startMs: number; endMs: number }>(config: {
+			existingRegions: T[];
+			createId: () => string;
+			createRegion: (id: string) => T;
+			pushRegion: (region: T) => void;
+			selectRegion: (id: string) => void;
+			errorTitle: string;
+			errorDescription: string;
+		}) {
+			const hasConflict = config.existingRegions.some((region) =>
+				spansOverlap(region.startMs, region.endMs, targetStart, targetEnd),
+			);
+			if (hasConflict) {
+				toast.error(config.errorTitle, {
+					description: config.errorDescription,
+				});
+				return true;
+			}
+
+			const id = config.createId();
+			config.pushRegion(config.createRegion(id));
+			clearTimelineSelection();
+			config.selectRegion(id);
+			return true;
+		}
 
 		if (timelineClipboard.kind === "annotation" || timelineClipboard.kind === "blur") {
 			const id = `annotation-${nextAnnotationIdRef.current++}`;
@@ -1121,10 +1138,7 @@ export default function VideoEditor() {
 				startMs: targetStart,
 				endMs: targetEnd,
 				zIndex,
-				position: {
-					x: Math.min(96, source.position.x + 4),
-					y: Math.min(96, source.position.y + 4),
-				},
+				position: getPastedAnnotationPosition(source.position, source.size),
 			};
 
 			pushState((prev) => ({
@@ -1145,95 +1159,68 @@ export default function VideoEditor() {
 		}
 
 		if (timelineClipboard.kind === "zoom") {
-			const hasConflict = zoomRegions.some((region) =>
-				spansOverlap(region.startMs, region.endMs, targetStart, targetEnd),
-			);
-			if (hasConflict) {
-				toast.error(tt("errors.cannotPlaceZoom"), {
-					description: tt("errors.zoomExistsAtLocation"),
-				});
-				return;
-			}
-
-			const id = `zoom-${nextZoomIdRef.current++}`;
-			pushState((prev) => ({
-				zoomRegions: [
-					...prev.zoomRegions,
-					{
-						...timelineClipboard.region,
-						id,
-						startMs: targetStart,
-						endMs: targetEnd,
-						focus: { ...timelineClipboard.region.focus },
-					},
-				],
-			}));
-			setSelectedZoomId(id);
-			setSelectedTrimId(null);
-			setSelectedAnnotationId(null);
-			setSelectedBlurId(null);
-			setSelectedSpeedId(null);
-			return;
-		}
-
-		if (timelineClipboard.kind === "trim") {
-			const hasConflict = trimRegions.some((region) =>
-				spansOverlap(region.startMs, region.endMs, targetStart, targetEnd),
-			);
-			if (hasConflict) {
-				toast.error(tt("errors.cannotPlaceTrim"), {
-					description: tt("errors.trimExistsAtLocation"),
-				});
-				return;
-			}
-
-			const id = `trim-${nextTrimIdRef.current++}`;
-			pushState((prev) => ({
-				trimRegions: [
-					...prev.trimRegions,
-					{
-						...timelineClipboard.region,
-						id,
-						startMs: targetStart,
-						endMs: targetEnd,
-					},
-				],
-			}));
-			setSelectedTrimId(id);
-			setSelectedZoomId(null);
-			setSelectedAnnotationId(null);
-			setSelectedBlurId(null);
-			setSelectedSpeedId(null);
-			return;
-		}
-
-		const hasConflict = speedRegions.some((region) =>
-			spansOverlap(region.startMs, region.endMs, targetStart, targetEnd),
-		);
-		if (hasConflict) {
-			toast.error(tt("errors.cannotPlaceSpeed"), {
-				description: tt("errors.speedExistsAtLocation"),
-			});
-			return;
-		}
-
-		const id = `speed-${nextSpeedIdRef.current++}`;
-		pushState((prev) => ({
-			speedRegions: [
-				...prev.speedRegions,
-				{
+			pasteSpanRegion({
+				existingRegions: zoomRegions,
+				createId: () => `zoom-${nextZoomIdRef.current++}`,
+				createRegion: (id) => ({
 					...timelineClipboard.region,
 					id,
 					startMs: targetStart,
 					endMs: targetEnd,
+					focus: { ...timelineClipboard.region.focus },
+				}),
+				pushRegion: (region) => {
+					pushState((prev) => ({
+						zoomRegions: [...prev.zoomRegions, region],
+					}));
 				},
-			],
-		}));
-		setSelectedSpeedId(id);
-		setSelectedZoomId(null);
-		setSelectedTrimId(null);
-		setSelectedAnnotationId(null);
-		setSelectedBlurId(null);
+				selectRegion: setSelectedZoomId,
+				errorTitle: tt("errors.cannotPlaceZoom"),
+				errorDescription: tt("errors.zoomExistsAtLocation"),
+			});
+			return;
+		}
+
+		if (timelineClipboard.kind === "trim") {
+			pasteSpanRegion({
+				existingRegions: trimRegions,
+				createId: () => `trim-${nextTrimIdRef.current++}`,
+				createRegion: (id) => ({
+					...timelineClipboard.region,
+					id,
+					startMs: targetStart,
+					endMs: targetEnd,
+				}),
+				pushRegion: (region) => {
+					pushState((prev) => ({
+						trimRegions: [...prev.trimRegions, region],
+					}));
+				},
+				selectRegion: setSelectedTrimId,
+				errorTitle: tt("errors.cannotPlaceTrim"),
+				errorDescription: tt("errors.trimExistsAtLocation"),
+			});
+			return;
+		}
+
+		pasteSpanRegion({
+			existingRegions: speedRegions,
+			createId: () => `speed-${nextSpeedIdRef.current++}`,
+			createRegion: (id) => ({
+				...timelineClipboard.region,
+				id,
+				startMs: targetStart,
+				endMs: targetEnd,
+			}),
+			pushRegion: (region) => {
+				pushState((prev) => ({
+					speedRegions: [...prev.speedRegions, region],
+				}));
+			},
+			selectRegion: setSelectedSpeedId,
+			errorTitle: tt("errors.cannotPlaceSpeed"),
+			errorDescription: tt("errors.speedExistsAtLocation"),
+		});
 	}, [
 		timelineClipboard,
 		duration,
