@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
+import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
 import { type Locale } from "@/i18n/config";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
@@ -166,6 +167,7 @@ export default function VideoEditor() {
 	const nextSpeedIdRef = useRef(1);
 
 	const { shortcuts, isMac } = useShortcuts();
+	const { notifyCopied, notifyPasted } = useClipboardFeedback();
 	const t = useScopedT("editor");
 	const ts = useScopedT("settings");
 	const tt = useScopedT("timeline");
@@ -1032,6 +1034,7 @@ export default function VideoEditor() {
 			const region = annotationOnlyRegions.find((item) => item.id === selectedAnnotationId);
 			if (region) {
 				setTimelineClipboard({ kind: "annotation", region: cloneAnnotationRegion(region) });
+				notifyCopied();
 			}
 			return;
 		}
@@ -1040,6 +1043,7 @@ export default function VideoEditor() {
 			const region = blurRegions.find((item) => item.id === selectedBlurId);
 			if (region) {
 				setTimelineClipboard({ kind: "blur", region: cloneAnnotationRegion(region) });
+				notifyCopied();
 			}
 			return;
 		}
@@ -1048,6 +1052,7 @@ export default function VideoEditor() {
 			const region = zoomRegions.find((item) => item.id === selectedZoomId);
 			if (region) {
 				setTimelineClipboard({ kind: "zoom", region: { ...region, focus: { ...region.focus } } });
+				notifyCopied();
 			}
 			return;
 		}
@@ -1056,6 +1061,7 @@ export default function VideoEditor() {
 			const region = trimRegions.find((item) => item.id === selectedTrimId);
 			if (region) {
 				setTimelineClipboard({ kind: "trim", region: { ...region } });
+				notifyCopied();
 			}
 			return;
 		}
@@ -1064,6 +1070,7 @@ export default function VideoEditor() {
 			const region = speedRegions.find((item) => item.id === selectedSpeedId);
 			if (region) {
 				setTimelineClipboard({ kind: "speed", region: { ...region } });
+				notifyCopied();
 			}
 		}
 	}, [
@@ -1077,6 +1084,7 @@ export default function VideoEditor() {
 		zoomRegions,
 		trimRegions,
 		speedRegions,
+		notifyCopied,
 	]);
 
 	const handlePasteTimelineItem = useCallback(() => {
@@ -1125,6 +1133,7 @@ export default function VideoEditor() {
 			config.pushRegion(config.createRegion(id));
 			clearTimelineSelection();
 			config.selectRegion(id);
+			notifyPasted();
 			return true;
 		}
 
@@ -1155,6 +1164,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
+			notifyPasted();
 			return;
 		}
 
@@ -1230,6 +1240,7 @@ export default function VideoEditor() {
 		trimRegions,
 		speedRegions,
 		tt,
+		notifyPasted,
 	]);
 
 	const handleAnnotationDelete = useCallback(

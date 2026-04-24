@@ -1,53 +1,57 @@
 {
 	"buttons": {
-		"addZoom": "Yakınlaştırma Ekle (Z)",
-		"suggestZooms": "İmleçten Yakınlaştırma Öner",
-		"addTrim": "Kırpma Ekle (T)",
-		"addAnnotation": "Açıklama Ekle (A)",
-		"addSpeed": "Hız Ekle (S)",
-		"addBlur": "Bulanık ekle (B)"
+		"addZoom": "YakÄ±nlaÅŸtÄ±rma Ekle (Z)",
+		"suggestZooms": "Ä°mleÃ§ten YakÄ±nlaÅŸtÄ±rma Ã–ner",
+		"addTrim": "KÄ±rpma Ekle (T)",
+		"addAnnotation": "AÃ§Ä±klama Ekle (A)",
+		"addSpeed": "HÄ±z Ekle (S)",
+		"addBlur": "BulanÄ±k ekle (B)"
 	},
 	"hints": {
-		"pressZoom": "Yakınlaştırma eklemek için Z tuşuna basın",
-		"pressTrim": "Kırpma eklemek için T tuşuna basın",
-		"pressAnnotation": "Açıklama eklemek için A tuşuna basın",
-		"pressSpeed": "Hız eklemek için S tuşuna basın",
-		"pressBlur": "Bulanık bölge eklemek için B tuşuna basın"
+		"pressZoom": "YakÄ±nlaÅŸtÄ±rma eklemek iÃ§in Z tuÅŸuna basÄ±n",
+		"pressTrim": "KÄ±rpma eklemek iÃ§in T tuÅŸuna basÄ±n",
+		"pressAnnotation": "AÃ§Ä±klama eklemek iÃ§in A tuÅŸuna basÄ±n",
+		"pressSpeed": "HÄ±z eklemek iÃ§in S tuÅŸuna basÄ±n",
+		"pressBlur": "BulanÄ±k bÃ¶lge eklemek iÃ§in B tuÅŸuna basÄ±n"
 	},
 	"labels": {
-		"pan": "Kaydır",
-		"zoom": "Yakınlaştır",
-		"zoomItem": "Yakınlaştırma {{index}}",
-		"trimItem": "Kırpma {{index}}",
-		"speedItem": "Hız {{index}}",
-		"annotationItem": "Açıklama",
-		"imageItem": "Görüntü",
-		"emptyText": "Boş metin",
-		"blurItem": "Bulanık {{index}}"
+		"pan": "KaydÄ±r",
+		"zoom": "YakÄ±nlaÅŸtÄ±r",
+		"zoomItem": "YakÄ±nlaÅŸtÄ±rma {{index}}",
+		"trimItem": "KÄ±rpma {{index}}",
+		"speedItem": "HÄ±z {{index}}",
+		"annotationItem": "AÃ§Ä±klama",
+		"imageItem": "GÃ¶rÃ¼ntÃ¼",
+		"emptyText": "BoÅŸ metin",
+		"blurItem": "BulanÄ±k {{index}}"
 	},
 	"emptyState": {
-		"noVideo": "Video Yüklenmedi",
-		"dragAndDrop": "Düzenlemeye başlamak için bir video sürükleyip bırakın"
+		"noVideo": "Video YÃ¼klenmedi",
+		"dragAndDrop": "DÃ¼zenlemeye baÅŸlamak iÃ§in bir video sÃ¼rÃ¼kleyip bÄ±rakÄ±n"
 	},
 	"errors": {
-		"cannotPlaceZoom": "Buraya yakınlaştırma yerleştirilemiyor",
-		"zoomExistsAtLocation": "Bu konumda zaten bir yakınlaştırma var veya yeterli alan yok.",
-		"zoomSuggestionUnavailable": "Yakınlaştırma öneri işleyicisi kullanılamıyor",
-		"noCursorTelemetry": "İmleç telemetrisi mevcut değil",
-		"noCursorTelemetryDescription": "İmleç tabanlı öneriler oluşturmak için önce bir ekran kaydı yapın.",
-		"noUsableTelemetry": "Kullanılabilir imleç telemetrisi yok",
-		"noUsableTelemetryDescription": "Kayıt yeterli imleç hareketi verisi içermiyor.",
-		"noDwellMoments": "Belirgin imleç bekleme anları bulunamadı",
-		"noDwellMomentsDescription": "Önemli işlemlerde daha yavaş imleç duraklamaları olan bir kayıt deneyin.",
-		"noAutoZoomSlots": "Otomatik yakınlaştırma alanı yok",
-		"noAutoZoomSlotsDescription": "Algılanan bekleme noktaları mevcut yakınlaştırma bölgeleriyle çakışıyor.",
-		"cannotPlaceTrim": "Buraya kırpma yerleştirilemiyor",
-		"trimExistsAtLocation": "Bu konumda zaten bir kırpma var veya yeterli alan yok.",
-		"cannotPlaceSpeed": "Buraya hız yerleştirilemiyor",
-		"speedExistsAtLocation": "Bu konumda zaten bir hız bölgesi var veya yeterli alan yok."
+		"cannotPlaceZoom": "Buraya yakÄ±nlaÅŸtÄ±rma yerleÅŸtirilemiyor",
+		"zoomExistsAtLocation": "Bu konumda zaten bir yakÄ±nlaÅŸtÄ±rma var veya yeterli alan yok.",
+		"zoomSuggestionUnavailable": "YakÄ±nlaÅŸtÄ±rma Ã¶neri iÅŸleyicisi kullanÄ±lamÄ±yor",
+		"noCursorTelemetry": "Ä°mleÃ§ telemetrisi mevcut deÄŸil",
+		"noCursorTelemetryDescription": "Ä°mleÃ§ tabanlÄ± Ã¶neriler oluÅŸturmak iÃ§in Ã¶nce bir ekran kaydÄ± yapÄ±n.",
+		"noUsableTelemetry": "KullanÄ±labilir imleÃ§ telemetrisi yok",
+		"noUsableTelemetryDescription": "KayÄ±t yeterli imleÃ§ hareketi verisi iÃ§ermiyor.",
+		"noDwellMoments": "Belirgin imleÃ§ bekleme anlarÄ± bulunamadÄ±",
+		"noDwellMomentsDescription": "Ã–nemli iÅŸlemlerde daha yavaÅŸ imleÃ§ duraklamalarÄ± olan bir kayÄ±t deneyin.",
+		"noAutoZoomSlots": "Otomatik yakÄ±nlaÅŸtÄ±rma alanÄ± yok",
+		"noAutoZoomSlotsDescription": "AlgÄ±lanan bekleme noktalarÄ± mevcut yakÄ±nlaÅŸtÄ±rma bÃ¶lgeleriyle Ã§akÄ±ÅŸÄ±yor.",
+		"cannotPlaceTrim": "Buraya kÄ±rpma yerleÅŸtirilemiyor",
+		"trimExistsAtLocation": "Bu konumda zaten bir kÄ±rpma var veya yeterli alan yok.",
+		"cannotPlaceSpeed": "Buraya hÄ±z yerleÅŸtirilemiyor",
+		"speedExistsAtLocation": "Bu konumda zaten bir hÄ±z bÃ¶lgesi var veya yeterli alan yok."
 	},
 	"success": {
-		"addedZoomSuggestions": "{{count}} imleç tabanlı yakınlaştırma önerisi eklendi",
-		"addedZoomSuggestionsPlural": "{{count}} imleç tabanlı yakınlaştırma önerisi eklendi"
+		"addedZoomSuggestions": "{{count}} imleÃ§ tabanlÄ± yakÄ±nlaÅŸtÄ±rma Ã¶nerisi eklendi",
+		"addedZoomSuggestionsPlural": "{{count}} imleÃ§ tabanlÄ± yakÄ±nlaÅŸtÄ±rma Ã¶nerisi eklendi"
+	},
+	"feedback": {
+		"copied": "Copied!",
+		"pasted": "Pasted!"
 	}
 }
