@@ -1,57 +1,57 @@
 {
 	"buttons": {
-		"addZoom": "æ·»åŠ ç¼©æ”¾ (Z)",
-		"suggestZooms": "æ ¹æ®å…‰æ ‡å»ºè®®ç¼©æ”¾",
-		"addTrim": "æ·»åŠ å‰ªè¾‘ (T)",
-		"addAnnotation": "æ·»åŠ æ ‡æ³¨ (A)",
-		"addSpeed": "æ·»åŠ é€Ÿåº¦ (S)",
-		"addBlur": "æ·»åŠ æ¨¡ç³Š (B)"
+		"addZoom": "添加缩放 (Z)",
+		"suggestZooms": "根据光标建议缩放",
+		"addTrim": "添加剪辑 (T)",
+		"addAnnotation": "添加标注 (A)",
+		"addSpeed": "添加速度 (S)",
+		"addBlur": "添加模糊 (B)"
 	},
 	"hints": {
-		"pressZoom": "æŒ‰ Z æ·»åŠ ç¼©æ”¾",
-		"pressTrim": "æŒ‰ T æ·»åŠ å‰ªè¾‘",
-		"pressAnnotation": "æŒ‰ A æ·»åŠ æ ‡æ³¨",
-		"pressSpeed": "æŒ‰ S æ·»åŠ é€Ÿåº¦",
-		"pressBlur": "æŒ‰ B æ·»åŠ æ¨¡ç³ŠåŒºåŸŸ"
+		"pressZoom": "按 Z 添加缩放",
+		"pressTrim": "按 T 添加剪辑",
+		"pressAnnotation": "按 A 添加标注",
+		"pressSpeed": "按 S 添加速度",
+		"pressBlur": "按 B 添加模糊区域"
 	},
 	"labels": {
-		"pan": "å¹³ç§»",
-		"zoom": "ç¼©æ”¾",
-		"zoomItem": "ç¼©æ”¾ {{index}}",
-		"trimItem": "å‰ªè¾‘ {{index}}",
-		"speedItem": "é€Ÿåº¦ {{index}}",
-		"annotationItem": "æ ‡æ³¨",
-		"imageItem": "å›¾ç‰‡",
-		"emptyText": "ç©ºæ–‡æœ¬",
-		"blurItem": "æ¨¡ç³Š {{index}}"
+		"pan": "平移",
+		"zoom": "缩放",
+		"zoomItem": "缩放 {{index}}",
+		"trimItem": "剪辑 {{index}}",
+		"speedItem": "速度 {{index}}",
+		"annotationItem": "标注",
+		"imageItem": "图片",
+		"emptyText": "空文本",
+		"blurItem": "模糊 {{index}}"
 	},
 	"emptyState": {
-		"noVideo": "æœªåŠ è½½è§†é¢‘",
-		"dragAndDrop": "æ‹–æ”¾è§†é¢‘ä»¥å¼€å§‹ç¼–è¾‘"
+		"noVideo": "未加载视频",
+		"dragAndDrop": "拖放视频以开始编辑"
 	},
 	"errors": {
-		"cannotPlaceZoom": "æ— æ³•åœ¨æ­¤å¤„æ”¾ç½®ç¼©æ”¾",
-		"zoomExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨ç¼©æ”¾æˆ–æ²¡æœ‰è¶³å¤Ÿçš„ç©ºé—´ã€‚",
-		"zoomSuggestionUnavailable": "ç¼©æ”¾å»ºè®®å¤„ç†å™¨ä¸å¯ç”¨",
-		"noCursorTelemetry": "æ— å¯ç”¨çš„å…‰æ ‡é¥æµ‹æ•°æ®",
-		"noCursorTelemetryDescription": "è¯·å…ˆå½•åˆ¶ä¸€æ®µå±å¹•å½•åƒä»¥ç”ŸæˆåŸºäºŽå…‰æ ‡çš„å»ºè®®ã€‚",
-		"noUsableTelemetry": "æ— å¯ç”¨çš„å…‰æ ‡é¥æµ‹æ•°æ®",
-		"noUsableTelemetryDescription": "å½•åˆ¶å†…å®¹æ²¡æœ‰åŒ…å«è¶³å¤Ÿçš„å…‰æ ‡ç§»åŠ¨æ•°æ®ã€‚",
-		"noDwellMoments": "æœªæ‰¾åˆ°æ˜Žç¡®çš„å…‰æ ‡åœç•™æ—¶åˆ»",
-		"noDwellMomentsDescription": "è¯·å°è¯•åœ¨é‡è¦æ“ä½œä¸Šè¿›è¡Œè¾ƒæ…¢å…‰æ ‡åœç•™çš„å½•åˆ¶ã€‚",
-		"noAutoZoomSlots": "æ— å¯ç”¨çš„è‡ªåŠ¨ç¼©æ”¾ä½ç½®",
-		"noAutoZoomSlotsDescription": "æ£€æµ‹åˆ°çš„åœç•™ç‚¹ä¸ŽçŽ°æœ‰ç¼©æ”¾åŒºåŸŸé‡å ã€‚",
-		"cannotPlaceTrim": "æ— æ³•åœ¨æ­¤å¤„æ”¾ç½®å‰ªè¾‘",
-		"trimExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨å‰ªè¾‘æˆ–æ²¡æœ‰è¶³å¤Ÿçš„ç©ºé—´ã€‚",
-		"cannotPlaceSpeed": "æ— æ³•åœ¨æ­¤å¤„æ”¾ç½®é€Ÿåº¦",
-		"speedExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨é€Ÿåº¦åŒºåŸŸæˆ–æ²¡æœ‰è¶³å¤Ÿçš„ç©ºé—´ã€‚"
+		"cannotPlaceZoom": "无法在此处放置缩放",
+		"zoomExistsAtLocation": "此位置已存在缩放或没有足够的空间。",
+		"zoomSuggestionUnavailable": "缩放建议处理器不可用",
+		"noCursorTelemetry": "无可用的光标遥测数据",
+		"noCursorTelemetryDescription": "请先录制一段屏幕录像以生成基于光标的建议。",
+		"noUsableTelemetry": "无可用的光标遥测数据",
+		"noUsableTelemetryDescription": "录制内容没有包含足够的光标移动数据。",
+		"noDwellMoments": "未找到明确的光标停留时刻",
+		"noDwellMomentsDescription": "请尝试在重要操作上进行较慢光标停留的录制。",
+		"noAutoZoomSlots": "无可用的自动缩放位置",
+		"noAutoZoomSlotsDescription": "检测到的停留点与现有缩放区域重叠。",
+		"cannotPlaceTrim": "无法在此处放置剪辑",
+		"trimExistsAtLocation": "此位置已存在剪辑或没有足够的空间。",
+		"cannotPlaceSpeed": "无法在此处放置速度",
+		"speedExistsAtLocation": "此位置已存在速度区域或没有足够的空间。"
 	},
 	"success": {
-		"addedZoomSuggestions": "å·²æ·»åŠ  {{count}} ä¸ªåŸºäºŽå…‰æ ‡çš„ç¼©æ”¾å»ºè®®",
-		"addedZoomSuggestionsPlural": "å·²æ·»åŠ  {{count}} ä¸ªåŸºäºŽå…‰æ ‡çš„ç¼©æ”¾å»ºè®®"
+		"addedZoomSuggestions": "已添加 {{count}} 个基于光标的缩放建议",
+		"addedZoomSuggestionsPlural": "已添加 {{count}} 个基于光标的缩放建议"
 	},
 	"feedback": {
-		"copied": "Copied!",
-		"pasted": "Pasted!"
+		"copied": "已复制！",
+		"pasted": "已粘贴！"
 	}
 }

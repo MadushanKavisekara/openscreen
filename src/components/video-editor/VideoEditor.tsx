@@ -1118,7 +1118,7 @@ export default function VideoEditor() {
 			selectRegion: (id: string) => void;
 			errorTitle: string;
 			errorDescription: string;
-		}) {
+		}): void {
 			const hasConflict = config.existingRegions.some((region) =>
 				spansOverlap(region.startMs, region.endMs, targetStart, targetEnd),
 			);
@@ -1126,7 +1126,7 @@ export default function VideoEditor() {
 				toast.error(config.errorTitle, {
 					description: config.errorDescription,
 				});
-				return true;
+				return;
 			}
 
 			const id = config.createId();
@@ -1134,7 +1134,6 @@ export default function VideoEditor() {
 			clearTimelineSelection();
 			config.selectRegion(id);
 			notifyPasted();
-			return true;
 		}
 
 		if (timelineClipboard.kind === "annotation" || timelineClipboard.kind === "blur") {
@@ -2158,7 +2157,7 @@ export default function VideoEditor() {
 										!!selectedBlurId ||
 										!!selectedSpeedId
 									}
-									canPasteTimelineItem={!!timelineClipboard}
+									canPasteTimelineItem={!!timelineClipboard && duration > 0}
 									onCopySelectedItem={handleCopySelectedTimelineItem}
 									onPasteTimelineItem={handlePasteTimelineItem}
 									aspectRatio={aspectRatio}

@@ -1,7 +1,7 @@
 {
 	"buttons": {
 		"addZoom": "Ajouter un zoom (Z)",
-		"suggestZooms": "SuggÃ©rer des zooms depuis le curseur",
+		"suggestZooms": "Suggérer des zooms depuis le curseur",
 		"addTrim": "Ajouter une coupe (T)",
 		"addAnnotation": "Ajouter une annotation (A)",
 		"addSpeed": "Ajouter une vitesse (S)",
@@ -26,32 +26,32 @@
 		"blurItem": "Flou {{index}}"
 	},
 	"emptyState": {
-		"noVideo": "Aucune vidÃ©o chargÃ©e",
-		"dragAndDrop": "Glissez-dÃ©posez une vidÃ©o pour commencer Ã  Ã©diter"
+		"noVideo": "Aucune vidéo chargée",
+		"dragAndDrop": "Glissez-déposez une vidéo pour commencer à éditer"
 	},
 	"errors": {
 		"cannotPlaceZoom": "Impossible de placer le zoom ici",
-		"zoomExistsAtLocation": "Un zoom existe dÃ©jÃ  Ã  cet emplacement ou l\u0027espace disponible est insuffisant.",
+		"zoomExistsAtLocation": "Un zoom existe déjà à cet emplacement ou l'espace disponible est insuffisant.",
 		"zoomSuggestionUnavailable": "Gestionnaire de suggestions de zoom non disponible",
-		"noCursorTelemetry": "Aucune tÃ©lÃ©mÃ©trie de curseur disponible",
-		"noCursorTelemetryDescription": "Enregistrez d\u0027abord un screencast pour gÃ©nÃ©rer des suggestions basÃ©es sur le curseur.",
-		"noUsableTelemetry": "Aucune tÃ©lÃ©mÃ©trie de curseur utilisable",
-		"noUsableTelemetryDescription": "L\u0027enregistrement ne contient pas suffisamment de donnÃ©es de mouvement du curseur.",
-		"noDwellMoments": "Aucun moment de pause du curseur trouvÃ©",
+		"noCursorTelemetry": "Aucune télémétrie de curseur disponible",
+		"noCursorTelemetryDescription": "Enregistrez d'abord un screencast pour générer des suggestions basées sur le curseur.",
+		"noUsableTelemetry": "Aucune télémétrie de curseur utilisable",
+		"noUsableTelemetryDescription": "L'enregistrement ne contient pas suffisamment de données de mouvement du curseur.",
+		"noDwellMoments": "Aucun moment de pause du curseur trouvé",
 		"noDwellMomentsDescription": "Essayez un enregistrement avec des pauses plus lentes du curseur sur les actions importantes.",
 		"noAutoZoomSlots": "Aucun emplacement de zoom automatique disponible",
-		"noAutoZoomSlotsDescription": "Les points de pause dÃ©tectÃ©s chevauchent des rÃ©gions de zoom existantes.",
+		"noAutoZoomSlotsDescription": "Les points de pause détectés chevauchent des régions de zoom existantes.",
 		"cannotPlaceTrim": "Impossible de placer la coupe ici",
-		"trimExistsAtLocation": "Une coupe existe dÃ©jÃ  Ã  cet emplacement ou l\u0027espace disponible est insuffisant.",
+		"trimExistsAtLocation": "Une coupe existe déjà à cet emplacement ou l'espace disponible est insuffisant.",
 		"cannotPlaceSpeed": "Impossible de placer la vitesse ici",
-		"speedExistsAtLocation": "Une rÃ©gion de vitesse existe dÃ©jÃ  Ã  cet emplacement ou l\u0027espace disponible est insuffisant."
+		"speedExistsAtLocation": "Une région de vitesse existe déjà à cet emplacement ou l'espace disponible est insuffisant."
 	},
 	"success": {
-		"addedZoomSuggestions": "{{count}} suggestion de zoom basÃ©e sur le curseur ajoutÃ©e",
-		"addedZoomSuggestionsPlural": "{{count}} suggestions de zoom basÃ©es sur le curseur ajoutÃ©es"
+		"addedZoomSuggestions": "{{count}} suggestion de zoom basée sur le curseur ajoutée",
+		"addedZoomSuggestionsPlural": "{{count}} suggestions de zoom basées sur le curseur ajoutées"
 	},
 	"feedback": {
-		"copied": "Copied!",
-		"pasted": "Pasted!"
+		"copied": "Copié !",
+		"pasted": "Collé !"
 	}
 }

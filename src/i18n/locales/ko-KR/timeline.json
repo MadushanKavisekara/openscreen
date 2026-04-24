@@ -1,54 +1,54 @@
 {
 	"buttons": {
-		"addZoom": "ì¤Œ ì¶”ê°€ (Z)",
-		"suggestZooms": "ì»¤ì„œ ê¸°ë°˜ ì¤Œ ì œì•ˆ",
-		"addTrim": "íŠ¸ë¦¼ ì¶”ê°€ (T)",
-		"addAnnotation": "ì£¼ì„ ì¶”ê°€ (A)",
-		"addSpeed": "ì†ë„ ì¶”ê°€ (S)"
+		"addZoom": "줌 추가 (Z)",
+		"suggestZooms": "커서 기반 줌 제안",
+		"addTrim": "트림 추가 (T)",
+		"addAnnotation": "주석 추가 (A)",
+		"addSpeed": "속도 추가 (S)"
 	},
 	"hints": {
-		"pressZoom": "Zë¥¼ ëˆŒëŸ¬ ì¤Œ ì¶”ê°€",
-		"pressTrim": "Të¥¼ ëˆŒëŸ¬ íŠ¸ë¦¼ ì¶”ê°€",
-		"pressAnnotation": "Aë¥¼ ëˆŒëŸ¬ ì£¼ì„ ì¶”ê°€",
-		"pressSpeed": "Së¥¼ ëˆŒëŸ¬ ì†ë„ ì¶”ê°€"
+		"pressZoom": "Z를 눌러 줌 추가",
+		"pressTrim": "T를 눌러 트림 추가",
+		"pressAnnotation": "A를 눌러 주석 추가",
+		"pressSpeed": "S를 눌러 속도 추가"
 	},
 	"labels": {
-		"pan": "ì´ë™",
-		"zoom": "ì¤Œ",
-		"zoomItem": "ì¤Œ {{index}}",
-		"trimItem": "íŠ¸ë¦¼ {{index}}",
-		"speedItem": "ì†ë„ {{index}}",
-		"annotationItem": "ì£¼ì„",
-		"imageItem": "ì´ë¯¸ì§€",
-		"emptyText": "ë¹ˆ í…ìŠ¤íŠ¸"
+		"pan": "이동",
+		"zoom": "줌",
+		"zoomItem": "줌 {{index}}",
+		"trimItem": "트림 {{index}}",
+		"speedItem": "속도 {{index}}",
+		"annotationItem": "주석",
+		"imageItem": "이미지",
+		"emptyText": "빈 텍스트"
 	},
 	"emptyState": {
-		"noVideo": "ë¶ˆëŸ¬ì˜¨ ë¹„ë””ì˜¤ ì—†ìŒ",
-		"dragAndDrop": "ë¹„ë””ì˜¤ë¥¼ ë“œëž˜ê·¸ ì•¤ ë“œë¡­í•´ì„œ íŽ¸ì§‘ì„ ì‹œìž‘í•˜ì„¸ìš”"
+		"noVideo": "불러온 비디오 없음",
+		"dragAndDrop": "비디오를 드래그 앤 드롭해서 편집을 시작하세요"
 	},
 	"errors": {
-		"cannotPlaceZoom": "ì´ ìœ„ì¹˜ì— ì¤Œì„ ì¶”ê°€í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤",
-		"zoomExistsAtLocation": "ì´ ìœ„ì¹˜ì— ì´ë¯¸ ì¤Œì´ ìžˆê±°ë‚˜ ê³µê°„ì´ ë¶€ì¡±í•©ë‹ˆë‹¤.",
-		"zoomSuggestionUnavailable": "ì¤Œ ì œì•ˆ ê¸°ëŠ¥ì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤",
-		"noCursorTelemetry": "ì»¤ì„œ ë°ì´í„°ê°€ ì—†ìŠµë‹ˆë‹¤",
-		"noCursorTelemetryDescription": "ì»¤ì„œ ê¸°ë°˜ ì œì•ˆì„ ìƒì„±í•˜ë ¤ë©´ ë¨¼ì € í™”ë©´ì„ ë…¹í™”í•´ ì£¼ì„¸ìš”.",
-		"noUsableTelemetry": "ì‚¬ìš© ê°€ëŠ¥í•œ ì»¤ì„œ ë°ì´í„°ê°€ ì—†ìŠµë‹ˆë‹¤",
-		"noUsableTelemetryDescription": "ë…¹í™”ì— ì¶©ë¶„í•œ ì»¤ì„œ ì´ë™ ë°ì´í„°ê°€ í¬í•¨ë˜ì–´ ìžˆì§€ ì•ŠìŠµë‹ˆë‹¤.",
-		"noDwellMoments": "ëª…í™•í•œ ì»¤ì„œ ì •ì§€ êµ¬ê°„ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤",
-		"noDwellMomentsDescription": "ì¤‘ìš”í•œ ë™ìž‘ì—ì„œ ì»¤ì„œë¥¼ ì²œì²œížˆ ë©ˆì¶”ë©° ë…¹í™”í•´ ë³´ì„¸ìš”.",
-		"noAutoZoomSlots": "ìžë™ ì¤Œ ìŠ¬ë¡¯ì´ ì—†ìŠµë‹ˆë‹¤",
-		"noAutoZoomSlotsDescription": "ê°ì§€ëœ ì •ì§€ ì§€ì ì´ ê¸°ì¡´ ì¤Œ êµ¬ê°„ê³¼ ê²¹ì¹©ë‹ˆë‹¤.",
-		"cannotPlaceTrim": "ì´ ìœ„ì¹˜ì— íŠ¸ë¦¼ì„ ì¶”ê°€í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤",
-		"trimExistsAtLocation": "ì´ ìœ„ì¹˜ì— ì´ë¯¸ íŠ¸ë¦¼ì´ ìžˆê±°ë‚˜ ê³µê°„ì´ ë¶€ì¡±í•©ë‹ˆë‹¤.",
-		"cannotPlaceSpeed": "ì´ ìœ„ì¹˜ì— ì†ë„ë¥¼ ì¶”ê°€í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤",
-		"speedExistsAtLocation": "ì´ ìœ„ì¹˜ì— ì´ë¯¸ ì†ë„ êµ¬ê°„ì´ ìžˆê±°ë‚˜ ê³µê°„ì´ ë¶€ì¡±í•©ë‹ˆë‹¤."
+		"cannotPlaceZoom": "이 위치에 줌을 추가할 수 없습니다",
+		"zoomExistsAtLocation": "이 위치에 이미 줌이 있거나 공간이 부족합니다.",
+		"zoomSuggestionUnavailable": "줌 제안 기능을 사용할 수 없습니다",
+		"noCursorTelemetry": "커서 데이터가 없습니다",
+		"noCursorTelemetryDescription": "커서 기반 제안을 생성하려면 먼저 화면을 녹화해 주세요.",
+		"noUsableTelemetry": "사용 가능한 커서 데이터가 없습니다",
+		"noUsableTelemetryDescription": "녹화에 충분한 커서 이동 데이터가 포함되어 있지 않습니다.",
+		"noDwellMoments": "명확한 커서 정지 구간을 찾을 수 없습니다",
+		"noDwellMomentsDescription": "중요한 동작에서 커서를 천천히 멈추며 녹화해 보세요.",
+		"noAutoZoomSlots": "자동 줌 슬롯이 없습니다",
+		"noAutoZoomSlotsDescription": "감지된 정지 지점이 기존 줌 구간과 겹칩니다.",
+		"cannotPlaceTrim": "이 위치에 트림을 추가할 수 없습니다",
+		"trimExistsAtLocation": "이 위치에 이미 트림이 있거나 공간이 부족합니다.",
+		"cannotPlaceSpeed": "이 위치에 속도를 추가할 수 없습니다",
+		"speedExistsAtLocation": "이 위치에 이미 속도 구간이 있거나 공간이 부족합니다."
 	},
 	"success": {
-		"addedZoomSuggestions": "ì»¤ì„œ ê¸°ë°˜ ì¤Œ ì œì•ˆ {{count}}ê°œê°€ ì¶”ê°€ë˜ì—ˆìŠµë‹ˆë‹¤",
-		"addedZoomSuggestionsPlural": "ì»¤ì„œ ê¸°ë°˜ ì¤Œ ì œì•ˆ {{count}}ê°œê°€ ì¶”ê°€ë˜ì—ˆìŠµë‹ˆë‹¤"
+		"addedZoomSuggestions": "커서 기반 줌 제안 {{count}}개가 추가되었습니다",
+		"addedZoomSuggestionsPlural": "커서 기반 줌 제안 {{count}}개가 추가되었습니다"
 	},
 	"feedback": {
-		"copied": "Copied!",
-		"pasted": "Pasted!"
+		"copied": "복사됨!",
+		"pasted": "붙여넣음!"
 	}
 }

@@ -1,57 +1,57 @@
 {
 	"buttons": {
-		"addZoom": "æ–°å¢žç¸®æ”¾ (Z)",
-		"suggestZooms": "æ ¹æ“šæ¸¸æ¨™å»ºè­°ç¸®æ”¾",
-		"addTrim": "æ–°å¢žå‰ªè¼¯ (T)",
-		"addAnnotation": "æ–°å¢žæ¨™è¨» (A)",
-		"addSpeed": "æ–°å¢žé€Ÿåº¦ (S)",
-		"addBlur": "æ–°å¢žæ¨¡ç³Š (B)"
+		"addZoom": "新增縮放 (Z)",
+		"suggestZooms": "根據游標建議縮放",
+		"addTrim": "新增剪輯 (T)",
+		"addAnnotation": "新增標註 (A)",
+		"addSpeed": "新增速度 (S)",
+		"addBlur": "新增模糊 (B)"
 	},
 	"hints": {
-		"pressZoom": "æŒ‰ Z æ–°å¢žç¸®æ”¾",
-		"pressTrim": "æŒ‰ T æ–°å¢žå‰ªè¼¯",
-		"pressAnnotation": "æŒ‰ A æ–°å¢žæ¨™è¨»",
-		"pressSpeed": "æŒ‰ S æ–°å¢žé€Ÿåº¦",
-		"pressBlur": "æŒ‰ B æ–°å¢žæ¨¡ç³Šå€åŸŸ"
+		"pressZoom": "按 Z 新增縮放",
+		"pressTrim": "按 T 新增剪輯",
+		"pressAnnotation": "按 A 新增標註",
+		"pressSpeed": "按 S 新增速度",
+		"pressBlur": "按 B 新增模糊區域"
 	},
 	"labels": {
-		"pan": "å¹³ç§»",
-		"zoom": "ç¸®æ”¾",
-		"zoomItem": "ç¸®æ”¾ {{index}}",
-		"trimItem": "å‰ªè¼¯ {{index}}",
-		"speedItem": "é€Ÿåº¦ {{index}}",
-		"annotationItem": "æ¨™è¨»",
-		"imageItem": "åœ–ç‰‡",
-		"emptyText": "ç©ºæ–‡å­—",
-		"blurItem": "æ¨¡ç³Š {{index}}"
+		"pan": "平移",
+		"zoom": "縮放",
+		"zoomItem": "縮放 {{index}}",
+		"trimItem": "剪輯 {{index}}",
+		"speedItem": "速度 {{index}}",
+		"annotationItem": "標註",
+		"imageItem": "圖片",
+		"emptyText": "空文字",
+		"blurItem": "模糊 {{index}}"
 	},
 	"emptyState": {
-		"noVideo": "æœªè¼‰å…¥å½±ç‰‡",
-		"dragAndDrop": "æ‹–æ”¾å½±ç‰‡ä»¥é–‹å§‹ç·¨è¼¯"
+		"noVideo": "未載入影片",
+		"dragAndDrop": "拖放影片以開始編輯"
 	},
 	"errors": {
-		"cannotPlaceZoom": "ç„¡æ³•åœ¨æ­¤è™•æ”¾ç½®ç¸®æ”¾",
-		"zoomExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨ç¸®æ”¾æˆ–æ²’æœ‰è¶³å¤ çš„ç©ºé–“ã€‚",
-		"zoomSuggestionUnavailable": "ç¸®æ”¾å»ºè­°è™•ç†å™¨ä¸å¯ç”¨",
-		"noCursorTelemetry": "ç„¡å¯ç”¨çš„æ¸¸æ¨™é™æ¸¬è³‡æ–™",
-		"noCursorTelemetryDescription": "è«‹å…ˆéŒ„è£½ä¸€æ®µèž¢å¹•éŒ„å½±ä»¥ç”¢ç”ŸåŸºæ–¼æ¸¸æ¨™çš„å»ºè­°ã€‚",
-		"noUsableTelemetry": "ç„¡å¯ç”¨çš„æ¸¸æ¨™é™æ¸¬è³‡æ–™",
-		"noUsableTelemetryDescription": "éŒ„è£½å…§å®¹æ²’æœ‰åŒ…å«è¶³å¤ çš„æ¸¸æ¨™ç§»å‹•è³‡æ–™ã€‚",
-		"noDwellMoments": "æœªæ‰¾åˆ°æ˜Žç¢ºçš„æ¸¸æ¨™åœç•™æ™‚åˆ»",
-		"noDwellMomentsDescription": "è«‹å˜—è©¦åœ¨é‡è¦æ“ä½œä¸Šé€²è¡Œè¼ƒæ…¢æ¸¸æ¨™åœç•™çš„éŒ„è£½ã€‚",
-		"noAutoZoomSlots": "ç„¡å¯ç”¨çš„è‡ªå‹•ç¸®æ”¾ä½ç½®",
-		"noAutoZoomSlotsDescription": "åµæ¸¬åˆ°çš„åœç•™é»žèˆ‡ç¾æœ‰ç¸®æ”¾å€åŸŸé‡ç–Šã€‚",
-		"cannotPlaceTrim": "ç„¡æ³•åœ¨æ­¤è™•æ”¾ç½®å‰ªè¼¯",
-		"trimExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨å‰ªè¼¯æˆ–æ²’æœ‰è¶³å¤ çš„ç©ºé–“ã€‚",
-		"cannotPlaceSpeed": "ç„¡æ³•åœ¨æ­¤è™•æ”¾ç½®é€Ÿåº¦",
-		"speedExistsAtLocation": "æ­¤ä½ç½®å·²å­˜åœ¨é€Ÿåº¦å€åŸŸæˆ–æ²’æœ‰è¶³å¤ çš„ç©ºé–“ã€‚"
+		"cannotPlaceZoom": "無法在此處放置縮放",
+		"zoomExistsAtLocation": "此位置已存在縮放或沒有足夠的空間。",
+		"zoomSuggestionUnavailable": "縮放建議處理器不可用",
+		"noCursorTelemetry": "無可用的游標遙測資料",
+		"noCursorTelemetryDescription": "請先錄製一段螢幕錄影以產生基於游標的建議。",
+		"noUsableTelemetry": "無可用的游標遙測資料",
+		"noUsableTelemetryDescription": "錄製內容沒有包含足夠的游標移動資料。",
+		"noDwellMoments": "未找到明確的游標停留時刻",
+		"noDwellMomentsDescription": "請嘗試在重要操作上進行較慢游標停留的錄製。",
+		"noAutoZoomSlots": "無可用的自動縮放位置",
+		"noAutoZoomSlotsDescription": "偵測到的停留點與現有縮放區域重疊。",
+		"cannotPlaceTrim": "無法在此處放置剪輯",
+		"trimExistsAtLocation": "此位置已存在剪輯或沒有足夠的空間。",
+		"cannotPlaceSpeed": "無法在此處放置速度",
+		"speedExistsAtLocation": "此位置已存在速度區域或沒有足夠的空間。"
 	},
 	"success": {
-		"addedZoomSuggestions": "å·²æ–°å¢ž {{count}} å€‹åŸºæ–¼æ¸¸æ¨™çš„ç¸®æ”¾å»ºè­°",
-		"addedZoomSuggestionsPlural": "å·²æ–°å¢ž {{count}} å€‹åŸºæ–¼æ¸¸æ¨™çš„ç¸®æ”¾å»ºè­°"
+		"addedZoomSuggestions": "已新增 {{count}} 個基於游標的縮放建議",
+		"addedZoomSuggestionsPlural": "已新增 {{count}} 個基於游標的縮放建議"
 	},
 	"feedback": {
-		"copied": "Copied!",
-		"pasted": "Pasted!"
+		"copied": "已複製！",
+		"pasted": "已貼上！"
 	}
 }
