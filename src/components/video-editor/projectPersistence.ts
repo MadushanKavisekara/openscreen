@@ -2,6 +2,7 @@ import { normalizeBlurColor, normalizeBlurType } from "@/lib/blurEffects";
 import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
 import type { ProjectMedia } from "@/lib/recordingSession";
 import { normalizeProjectMedia } from "@/lib/recordingSession";
+import { DEFAULT_WALLPAPER, WALLPAPER_PATHS } from "@/lib/wallpaper";
 import { ASPECT_RATIOS, type AspectRatio, isPortraitAspectRatio } from "@/utils/aspectRatioUtils";
 import {
 	type AnnotationRegion,
@@ -37,13 +38,23 @@ import {
 	type ZoomRegion,
 } from "./types";
 
-const WALLPAPER_COUNT = 18;
 const VALID_BLUR_SHAPES = new Set(["rectangle", "oval", "freehand"] as const);
 
-export const WALLPAPER_PATHS = Array.from(
-	{ length: WALLPAPER_COUNT },
-	(_, i) => `/wallpapers/wallpaper${i + 1}.jpg`,
-);
+// Pre-fix projects could persist resolved file:// URLs (machine-specific) for
+// bundled wallpapers. Rewrite only paths that match a known install layout
+// (resources/[assets/]wallpapers for packaged, public/wallpapers for dev) so
+// a legitimate user file that happens to live in a folder named "wallpapers"
+// elsewhere is never silently replaced.
+const LEGACY_FILE_WALLPAPER_RE =
+	/^file:\/\/.*?\/(?:resources\/(?:assets\/)?|public\/)wallpapers\/(wallpaper\d+\.jpg)$/i;
+const CANONICAL_WALLPAPERS = new Set(WALLPAPER_PATHS);
+
+function normalizeWallpaperValue(value: string): string {
+	const match = LEGACY_FILE_WALLPAPER_RE.exec(value);
+	if (!match) return value;
+	const canonical = `/wallpapers/${match[1]}`;
+	return CANONICAL_WALLPAPERS.has(canonical) ? canonical : DEFAULT_WALLPAPER;
+}
 
 export const PROJECT_VERSION = 2;
 
@@ -69,6 +80,7 @@ export interface ProjectEditorState {
 	gifFrameRate: GifFrameRate;
 	gifLoop: boolean;
 	gifSizePreset: GifSizePreset;
+	cursorHighlight: import("./videoPlayback/cursorHighlight").CursorHighlightConfig;
 }
 
 export interface EditorProjectData {
@@ -88,6 +100,7 @@ function computeNormalizedWebcamLayoutPreset(
 ): WebcamLayoutPreset {
 	switch (webcamLayoutPreset) {
 		case "picture-in-picture":
+		case "no-webcam":
 			return webcamLayoutPreset;
 		case "vertical-stack":
 			return isPortraitAspectRatio(normalizedAspectRatio)
@@ -239,6 +252,12 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 					const startMs = Math.max(0, Math.min(rawStart, rawEnd));
 					const endMs = Math.max(startMs + 1, rawEnd);
 
+					const validPreset =
+						region.rotationPreset === "iso" ||
+						region.rotationPreset === "left" ||
+						region.rotationPreset === "right"
+							? region.rotationPreset
+							: undefined;
 					return {
 						id: region.id,
 						startMs,
@@ -249,6 +268,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 							cy: clamp(isFiniteNumber(region.focus?.cy) ? region.focus.cy : 0.5, 0, 1),
 						},
 						focusMode: region.focusMode === "auto" ? "auto" : "manual",
+						...(validPreset ? { rotationPreset: validPreset } : {}),
 					};
 				})
 		: [];
@@ -425,7 +445,10 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 	const cropHeight = clamp(rawCropHeight, 0.01, 1 - cropY);
 
 	return {
-		wallpaper: typeof editor.wallpaper === "string" ? editor.wallpaper : WALLPAPER_PATHS[0],
+		wallpaper:
+			typeof editor.wallpaper === "string"
+				? normalizeWallpaperValue(editor.wallpaper)
+				: DEFAULT_WALLPAPER,
 		shadowIntensity: typeof editor.shadowIntensity === "number" ? editor.shadowIntensity : 0,
 		showBlur: typeof editor.showBlur === "boolean" ? editor.showBlur : false,
 		motionBlurAmount: isFiniteNumber(editor.motionBlurAmount)
@@ -480,6 +503,52 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 			editor.gifSizePreset === "original"
 				? editor.gifSizePreset
 				: "medium",
+		cursorHighlight: normalizeCursorHighlight(editor.cursorHighlight),
+	};
+}
+
+function normalizeCursorHighlight(
+	value: unknown,
+): import("./videoPlayback/cursorHighlight").CursorHighlightConfig {
+	const fallback: import("./videoPlayback/cursorHighlight").CursorHighlightConfig = {
+		enabled: false,
+		style: "ring",
+		sizePx: 24,
+		color: "#FFD700",
+		opacity: 0.9,
+		onlyOnClicks: false,
+		clickEmphasisDurationMs: 350,
+		offsetXNorm: 0,
+		offsetYNorm: 0,
+	};
+	if (!value || typeof value !== "object") return fallback;
+	const v = value as Partial<import("./videoPlayback/cursorHighlight").CursorHighlightConfig>;
+	return {
+		enabled: typeof v.enabled === "boolean" ? v.enabled : fallback.enabled,
+		style: v.style === "dot" || v.style === "ring" ? v.style : fallback.style,
+		sizePx:
+			typeof v.sizePx === "number" && v.sizePx >= 10 && v.sizePx <= 36 ? v.sizePx : fallback.sizePx,
+		color:
+			typeof v.color === "string" && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v.color)
+				? v.color
+				: fallback.color,
+		opacity:
+			typeof v.opacity === "number" && v.opacity >= 0 && v.opacity <= 1
+				? v.opacity
+				: fallback.opacity,
+		onlyOnClicks: typeof v.onlyOnClicks === "boolean" ? v.onlyOnClicks : fallback.onlyOnClicks,
+		clickEmphasisDurationMs:
+			typeof v.clickEmphasisDurationMs === "number" && v.clickEmphasisDurationMs > 0
+				? v.clickEmphasisDurationMs
+				: fallback.clickEmphasisDurationMs,
+		offsetXNorm:
+			typeof v.offsetXNorm === "number" && Number.isFinite(v.offsetXNorm)
+				? Math.max(-1, Math.min(1, v.offsetXNorm))
+				: fallback.offsetXNorm,
+		offsetYNorm:
+			typeof v.offsetYNorm === "number" && Number.isFinite(v.offsetYNorm)
+				? Math.max(-1, Math.min(1, v.offsetYNorm))
+				: fallback.offsetYNorm,
 	};
 }
 

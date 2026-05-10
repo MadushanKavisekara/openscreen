@@ -8,6 +8,7 @@ import type {
 	WebcamSizePreset,
 	ZoomRegion,
 } from "@/components/video-editor/types";
+import { BackgroundLoadError } from "@/lib/wallpaper";
 import { getPlatform } from "@/utils/platformUtils";
 import { AsyncVideoFrameQueue } from "./asyncVideoFrameQueue";
 import { FrameRenderer } from "./frameRenderer";
@@ -50,6 +51,8 @@ interface GifExporterConfig {
 	previewWidth?: number;
 	previewHeight?: number;
 	cursorTelemetry?: import("@/components/video-editor/types").CursorTelemetryPoint[];
+	cursorHighlight?: import("@/components/video-editor/videoPlayback/cursorHighlight").CursorHighlightConfig;
+	cursorClickTimestamps?: number[];
 	onProgress?: (progress: ExportProgress) => void;
 }
 
@@ -117,6 +120,9 @@ export class GifExporter {
 	async export(): Promise<ExportResult> {
 		let webcamFrameQueue: AsyncVideoFrameQueue | null = null;
 
+		const warnings: string[] = [];
+		const onWarning = (message: string) => warnings.push(message);
+
 		try {
 			const platform = await getPlatform();
 
@@ -157,6 +163,8 @@ export class GifExporter {
 				previewWidth: this.config.previewWidth,
 				previewHeight: this.config.previewHeight,
 				cursorTelemetry: this.config.cursorTelemetry,
+				cursorClickTimestamps: this.config.cursorClickTimestamps,
+				cursorHighlight: this.config.cursorHighlight,
 				platform,
 			});
 			await this.renderer.initialize();
@@ -219,6 +227,7 @@ export class GifExporter {
 										}
 										queue.enqueue(webcamFrame);
 									},
+									onWarning,
 								)
 								.catch((error) => {
 									webcamDecodeError = error instanceof Error ? error : new Error(String(error));
@@ -278,6 +287,7 @@ export class GifExporter {
 						webcamFrame?.close();
 					}
 				},
+				onWarning,
 			);
 
 			if (this.cancelled) {
@@ -324,8 +334,11 @@ export class GifExporter {
 				this.gif!.render();
 			});
 
-			return { success: true, blob };
+			return { success: true, blob, warnings: warnings.length > 0 ? warnings : undefined };
 		} catch (error) {
+			if (error instanceof BackgroundLoadError) {
+				throw error;
+			}
 			console.error("GIF Export error:", error);
 			return {
 				success: false,

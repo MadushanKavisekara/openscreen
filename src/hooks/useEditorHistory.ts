@@ -17,6 +17,11 @@ import {
 	DEFAULT_WEBCAM_POSITION,
 	DEFAULT_WEBCAM_SIZE_PRESET,
 } from "@/components/video-editor/types";
+import {
+	type CursorHighlightConfig,
+	DEFAULT_CURSOR_HIGHLIGHT,
+} from "@/components/video-editor/videoPlayback/cursorHighlight";
+import { DEFAULT_WALLPAPER } from "@/lib/wallpaper";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 
 // Undoable state — selection IDs are intentionally excluded (undoing a
@@ -38,6 +43,7 @@ export interface EditorState {
 	webcamMaskShape: WebcamMaskShape;
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
+	cursorHighlight: CursorHighlightConfig;
 }
 
 export const INITIAL_EDITOR_STATE: EditorState = {
@@ -46,7 +52,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 	speedRegions: [],
 	annotationRegions: [],
 	cropRegion: DEFAULT_CROP_REGION,
-	wallpaper: "/wallpapers/wallpaper1.jpg",
+	wallpaper: DEFAULT_WALLPAPER,
 	shadowIntensity: 0,
 	showBlur: false,
 	motionBlurAmount: 0,
@@ -57,6 +63,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 	webcamMaskShape: DEFAULT_WEBCAM_MASK_SHAPE,
 	webcamSizePreset: DEFAULT_WEBCAM_SIZE_PRESET,
 	webcamPosition: DEFAULT_WEBCAM_POSITION,
+	cursorHighlight: DEFAULT_CURSOR_HIGHLIGHT,
 };
 
 type StateUpdate = Partial<EditorState> | ((prev: EditorState) => Partial<EditorState>);

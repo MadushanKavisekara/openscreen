@@ -7,6 +7,7 @@ import type {
 	WebcamSizePreset,
 	ZoomRegion,
 } from "@/components/video-editor/types";
+import { BackgroundLoadError } from "@/lib/wallpaper";
 import { getPlatform } from "@/utils/platformUtils";
 import { AsyncVideoFrameQueue } from "./asyncVideoFrameQueue";
 import { AudioProcessor } from "./audioEncoder";
@@ -41,6 +42,8 @@ interface VideoExporterConfig extends ExportConfig {
 	previewWidth?: number;
 	previewHeight?: number;
 	cursorTelemetry?: import("@/components/video-editor/types").CursorTelemetryPoint[];
+	cursorHighlight?: import("@/components/video-editor/videoPlayback/cursorHighlight").CursorHighlightConfig;
+	cursorClickTimestamps?: number[];
 	onProgress?: (progress: ExportProgress) => void;
 }
 
@@ -82,6 +85,10 @@ export class VideoExporter {
 					return { success: false, error: "Export cancelled" };
 				}
 
+				if (normalizedError instanceof BackgroundLoadError) {
+					throw normalizedError;
+				}
+
 				if (encoderPreferences.length > 1) {
 					console.warn(
 						`[VideoExporter] ${encoderPreference} export attempt failed:`,
@@ -107,6 +114,8 @@ export class VideoExporter {
 		let webcamDecodeError: Error | null = null;
 		let webcamDecodePromise: Promise<void> | null = null;
 		let webcamDecoder: StreamingVideoDecoder | null = null;
+		const warnings: string[] = [];
+		const onWarning = (message: string) => warnings.push(message);
 
 		this.cleanup();
 		this.cancelled = false;
@@ -149,6 +158,8 @@ export class VideoExporter {
 				previewWidth: this.config.previewWidth,
 				previewHeight: this.config.previewHeight,
 				cursorTelemetry: this.config.cursorTelemetry,
+				cursorClickTimestamps: this.config.cursorClickTimestamps,
+				cursorHighlight: this.config.cursorHighlight,
 				platform,
 			});
 			this.renderer = renderer;
@@ -194,6 +205,7 @@ export class VideoExporter {
 										}
 										queue.enqueue(webcamFrame);
 									},
+									onWarning,
 								)
 								.catch((error) => {
 									webcamDecodeError = error instanceof Error ? error : new Error(String(error));
@@ -298,6 +310,7 @@ export class VideoExporter {
 						webcamFrame?.close();
 					}
 				},
+				onWarning,
 			);
 
 			if (this.cancelled) {
@@ -354,7 +367,7 @@ export class VideoExporter {
 			}
 
 			const blob = await muxer.finalize();
-			return { success: true, blob };
+			return { success: true, blob, warnings: warnings.length > 0 ? warnings : undefined };
 		} finally {
 			stopWebcamDecode = true;
 			webcamFrameQueue?.destroy();
