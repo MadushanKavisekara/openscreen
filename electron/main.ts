@@ -13,7 +13,7 @@ import {
 	Tray,
 } from "electron";
 import { mainT, setMainLocale } from "./i18n";
-import { registerIpcHandlers } from "./ipc/handlers";
+import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
 import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
@@ -450,6 +450,24 @@ app.whenReady().then(async () => {
 		app.dock?.show();
 	}
 
+	// Windows can use the pre-selected source without showing Electron's picker.
+	// Registering this only on Windows preserves the default macOS/Linux capture
+	// behavior, including platform audio handling.
+	if (process.platform === "win32") {
+		session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+			const source = getSelectedDesktopSource();
+			if (!source) {
+				callback({});
+				return;
+			}
+			const audioRequested = Boolean((request as { audioRequested?: boolean }).audioRequested);
+			callback({
+				video: source,
+				...(audioRequested ? { audio: "loopback" as const } : {}),
+			});
+		});
+	}
+
 	// Allow microphone/media/screen permission checks
 	session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
 		const allowed = [
@@ -490,7 +508,9 @@ app.whenReady().then(async () => {
 		// driven by later getSources() calls (fixes repeated permission dialog).
 		const screenStatus = systemPreferences.getMediaAccessStatus("screen");
 		if (screenStatus === "not-determined") {
-			desktopCapturer.getSources({ types: ["screen"] }).catch(() => {});
+			desktopCapturer.getSources({ types: ["screen"] }).catch(() => {
+				// The permission prompt is best-effort at startup.
+			});
 		}
 	}
 

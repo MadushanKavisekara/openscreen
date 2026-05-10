@@ -25,8 +25,24 @@ import {
 	type WebcamLayoutPreset,
 	type WebcamSizePreset,
 } from "@/lib/compositeLayout";
+import {
+	createNativeCursorMotionBlurState,
+	createNativeCursorSmoothingState,
+	getNativeCursorClickBounceProgress,
+	getNativeCursorClickBounceScale,
+	getNativeCursorMotionBlurPx,
+	hasNativeCursorRecordingData,
+	projectNativeCursorToLocal,
+	projectNativeCursorToStage,
+	resetNativeCursorMotionBlurState,
+	resetNativeCursorSmoothingState,
+	resolveInterpolatedNativeCursorFrame,
+	resolveNativeCursorRenderAsset,
+	smoothNativeCursorSample,
+} from "@/lib/cursor/nativeCursor";
 import { classifyWallpaper, DEFAULT_WALLPAPER, resolveImageWallpaperUrl } from "@/lib/wallpaper";
 import { getCssClipPath } from "@/lib/webcamMaskShapes";
+import type { CursorRecordingData } from "@/native/contracts";
 import {
 	type AspectRatio,
 	formatAspectRatioForCSS,
@@ -37,6 +53,10 @@ import {
 	type AnnotationRegion,
 	type BlurData,
 	computeRotation3DContainScale,
+	DEFAULT_CURSOR_CLICK_BOUNCE,
+	DEFAULT_CURSOR_MOTION_BLUR,
+	DEFAULT_CURSOR_SIZE,
+	DEFAULT_CURSOR_SMOOTHING,
 	DEFAULT_ROTATION_3D,
 	getZoomScale,
 	isRotation3DIdentity,
@@ -118,6 +138,7 @@ interface VideoPlaybackProps {
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];
 	aspectRatio: AspectRatio;
+	cursorRecordingData?: CursorRecordingData | null;
 	annotationRegions?: AnnotationRegion[];
 	selectedAnnotationId?: string | null;
 	onSelectAnnotation?: (id: string | null) => void;
@@ -133,6 +154,11 @@ interface VideoPlaybackProps {
 	cursorTelemetry?: import("./types").CursorTelemetryPoint[];
 	cursorHighlight?: CursorHighlightConfig;
 	cursorClickTimestamps?: number[];
+	showCursor?: boolean;
+	cursorSize?: number;
+	cursorSmoothing?: number;
+	cursorMotionBlur?: number;
+	cursorClickBounce?: number;
 }
 
 export interface VideoPlaybackRef {
@@ -178,6 +204,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			trimRegions = [],
 			speedRegions = [],
 			aspectRatio,
+			cursorRecordingData = null,
 			annotationRegions = [],
 			selectedAnnotationId,
 			onSelectAnnotation,
@@ -193,6 +220,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cursorTelemetry = [],
 			cursorHighlight = DEFAULT_CURSOR_HIGHLIGHT,
 			cursorClickTimestamps = [],
+			showCursor = true,
+			cursorSize = DEFAULT_CURSOR_SIZE,
+			cursorSmoothing = DEFAULT_CURSOR_SMOOTHING,
+			cursorMotionBlur = DEFAULT_CURSOR_MOTION_BLUR,
+			cursorClickBounce = DEFAULT_CURSOR_CLICK_BOUNCE,
 		},
 		ref,
 	) => {
@@ -221,6 +253,20 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cursorHighlightRef = useRef<CursorHighlightConfig>(DEFAULT_CURSOR_HIGHLIGHT);
 		const cursorClickTimestampsRef = useRef<number[]>([]);
 		const cursorHighlightGraphicsRef = useRef<Graphics | null>(null);
+		const showCursorRef = useRef(showCursor);
+		const cursorSizeRef = useRef(cursorSize);
+		const cursorSmoothingRef = useRef(cursorSmoothing);
+		const cursorMotionBlurRef = useRef(cursorMotionBlur);
+		const cursorClickBounceRef = useRef(cursorClickBounce);
+		const cursorRecordingDataRef = useRef<CursorRecordingData | null>(cursorRecordingData);
+		const hasNativeCursorRecordingRef = useRef(hasNativeCursorRecordingData(cursorRecordingData));
+		const cropRegionRef = useRef(cropRegion);
+		const nativeCursorSpriteRef = useRef<Sprite | null>(null);
+		const nativeCursorTextureIdRef = useRef<string | null>(null);
+		const nativeCursorImageRef = useRef<HTMLImageElement | null>(null);
+		const nativeCursorImageIdRef = useRef<string | null>(null);
+		const nativeCursorSmoothingStateRef = useRef(createNativeCursorSmoothingState());
+		const nativeCursorMotionBlurStateRef = useRef(createNativeCursorMotionBlurState());
 		const selectedZoomIdRef = useRef<string | null>(null);
 		const animationStateRef = useRef({
 			scale: 1,
@@ -562,6 +608,37 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [cursorClickTimestamps]);
 
 		useEffect(() => {
+			cursorRecordingDataRef.current = cursorRecordingData;
+			hasNativeCursorRecordingRef.current = hasNativeCursorRecordingData(cursorRecordingData);
+			resetNativeCursorSmoothingState(nativeCursorSmoothingStateRef.current);
+			resetNativeCursorMotionBlurState(nativeCursorMotionBlurStateRef.current);
+		}, [cursorRecordingData]);
+
+		useEffect(() => {
+			showCursorRef.current = showCursor;
+		}, [showCursor]);
+
+		useEffect(() => {
+			cursorSizeRef.current = cursorSize;
+		}, [cursorSize]);
+
+		useEffect(() => {
+			cursorSmoothingRef.current = cursorSmoothing;
+		}, [cursorSmoothing]);
+
+		useEffect(() => {
+			cursorMotionBlurRef.current = cursorMotionBlur;
+		}, [cursorMotionBlur]);
+
+		useEffect(() => {
+			cursorClickBounceRef.current = cursorClickBounce;
+		}, [cursorClickBounce]);
+
+		useEffect(() => {
+			cropRegionRef.current = cropRegion;
+		}, [cropRegion]);
+
+		useEffect(() => {
 			selectedZoomIdRef.current = selectedZoomId;
 		}, [selectedZoomId]);
 
@@ -808,6 +885,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cursorHighlightGraphicsRef.current = cursorHighlightGraphics;
 			drawCursorHighlightGraphics(cursorHighlightGraphics, cursorHighlightRef.current);
 
+			const nativeCursorSprite = new Sprite(Texture.EMPTY);
+			nativeCursorSprite.visible = false;
+			nativeCursorSprite.eventMode = "none";
+			videoContainer.addChild(nativeCursorSprite);
+			nativeCursorSpriteRef.current = nativeCursorSprite;
+
 			animationStateRef.current = {
 				scale: 1,
 				focusX: DEFAULT_FOCUS.cx,
@@ -874,6 +957,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					videoContainer.removeChild(cursorHighlightGraphicsRef.current);
 					cursorHighlightGraphicsRef.current.destroy();
 					cursorHighlightGraphicsRef.current = null;
+				}
+				if (nativeCursorSpriteRef.current) {
+					videoContainer.removeChild(nativeCursorSpriteRef.current);
+					nativeCursorSpriteRef.current.destroy();
+					nativeCursorSpriteRef.current = null;
+					nativeCursorTextureIdRef.current = null;
 				}
 				videoContainer.mask = null;
 				maskGraphicsRef.current = null;
@@ -1129,6 +1218,115 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					}
 				}
 
+				const nativeCursorSprite = nativeCursorSpriteRef.current;
+				const nativeCursorImage = nativeCursorImageRef.current;
+				const hideNativeCursorPreview = () => {
+					if (nativeCursorSprite) {
+						nativeCursorSprite.visible = false;
+					}
+					if (nativeCursorImage) {
+						nativeCursorImage.style.display = "none";
+						nativeCursorImage.style.filter = "none";
+					}
+					resetNativeCursorSmoothingState(nativeCursorSmoothingStateRef.current);
+					resetNativeCursorMotionBlurState(nativeCursorMotionBlurStateRef.current);
+				};
+
+				if (nativeCursorImage && hasNativeCursorRecordingRef.current && showCursorRef.current) {
+					const timeMs = currentTimeRef.current;
+					const frame = resolveInterpolatedNativeCursorFrame(
+						cursorRecordingDataRef.current,
+						timeMs,
+					);
+					if (frame) {
+						const displaySample = smoothNativeCursorSample({
+							forceSnap: !isPlayingRef.current || isSeekingRef.current,
+							sample: frame.sample,
+							smoothing: cursorSmoothingRef.current,
+							state: nativeCursorSmoothingStateRef.current,
+							timeMs,
+						});
+						const cameraContainer = cameraContainerRef.current;
+						const videoContainer = videoContainerRef.current;
+						const cropRegionValue = cropRegionRef.current ?? { x: 0, y: 0, width: 1, height: 1 };
+						const projectedLocalPoint = projectNativeCursorToLocal({
+							cropRegion: cropRegionValue,
+							maskRect: baseMaskRef.current,
+							sample: displaySample,
+						});
+						const projectedStagePoint =
+							cameraContainer && videoContainer
+								? projectNativeCursorToStage({
+										cameraContainer,
+										cropRegion: cropRegionValue,
+										maskRect: baseMaskRef.current,
+										videoContainerPosition: {
+											x: videoContainer.x,
+											y: videoContainer.y,
+										},
+										sample: displaySample,
+									})
+								: null;
+
+						if (projectedLocalPoint && projectedStagePoint) {
+							const renderAsset = resolveNativeCursorRenderAsset(
+								frame.asset,
+								window.devicePixelRatio || 1,
+								displaySample,
+							);
+							const bounceProgress = getNativeCursorClickBounceProgress(
+								cursorRecordingDataRef.current,
+								timeMs,
+							);
+							const scale =
+								Math.max(0, cursorSizeRef.current) *
+								getNativeCursorClickBounceScale(cursorClickBounceRef.current, bounceProgress);
+							const transformedScale = scale * Math.abs(cameraContainer?.scale.x || 1);
+							const blurPx =
+								!isPlayingRef.current || isSeekingRef.current
+									? 0
+									: getNativeCursorMotionBlurPx({
+											motionBlur: cursorMotionBlurRef.current,
+											point: projectedStagePoint,
+											state: nativeCursorMotionBlurStateRef.current,
+											timeMs,
+										});
+
+							if (nativeCursorImageIdRef.current !== renderAsset.id) {
+								nativeCursorImage.src = renderAsset.imageDataUrl;
+								nativeCursorImageIdRef.current = renderAsset.id;
+							}
+							nativeCursorImage.style.display = "block";
+							nativeCursorImage.style.width = `${renderAsset.width * transformedScale}px`;
+							nativeCursorImage.style.height = `${renderAsset.height * transformedScale}px`;
+							nativeCursorImage.style.filter = blurPx > 0 ? `blur(${blurPx.toFixed(2)}px)` : "none";
+							nativeCursorImage.style.transform = `translate3d(${
+								projectedStagePoint.x - renderAsset.hotspotX * transformedScale
+							}px, ${projectedStagePoint.y - renderAsset.hotspotY * transformedScale}px, 0)`;
+
+							if (nativeCursorSprite) {
+								nativeCursorSprite.visible = false;
+								if (nativeCursorTextureIdRef.current !== renderAsset.id) {
+									nativeCursorSprite.texture = Texture.from(renderAsset.imageDataUrl);
+									nativeCursorTextureIdRef.current = renderAsset.id;
+								}
+								nativeCursorSprite.position.set(
+									projectedLocalPoint.x - renderAsset.hotspotX * scale,
+									projectedLocalPoint.y - renderAsset.hotspotY * scale,
+								);
+								nativeCursorSprite.width = renderAsset.width * scale;
+								nativeCursorSprite.height = renderAsset.height * scale;
+							}
+						} else {
+							hideNativeCursorPreview();
+						}
+					} else {
+						hideNativeCursorPreview();
+					}
+				} else {
+					hideNativeCursorPreview();
+				}
+
 				const isMotionBlurActive =
 					(motionBlurAmountRef.current || 0) > 0 && isPlayingRef.current && !isScrubbingRef.current;
 
@@ -1365,6 +1563,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								showShadow && shadowIntensity > 0
 									? `drop-shadow(0 ${shadowIntensity * 12}px ${shadowIntensity * 48}px rgba(0,0,0,${shadowIntensity * 0.7})) drop-shadow(0 ${shadowIntensity * 4}px ${shadowIntensity * 16}px rgba(0,0,0,${shadowIntensity * 0.5})) drop-shadow(0 ${shadowIntensity * 2}px ${shadowIntensity * 8}px rgba(0,0,0,${shadowIntensity * 0.3}))`
 									: "none",
+						}}
+					/>
+					<img
+						ref={nativeCursorImageRef}
+						alt=""
+						aria-hidden="true"
+						className="absolute left-0 top-0 select-none"
+						style={{
+							display: "none",
+							pointerEvents: "none",
+							transformOrigin: "0 0",
+							zIndex: 18,
 						}}
 					/>
 					{webcamVideoPath &&

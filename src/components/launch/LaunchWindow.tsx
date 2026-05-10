@@ -101,12 +101,14 @@ export function LaunchWindow() {
 		setMicrophoneEnabled,
 		microphoneDeviceId,
 		setMicrophoneDeviceId,
+		setMicrophoneDeviceName,
 		systemAudioEnabled,
 		setSystemAudioEnabled,
 		webcamEnabled,
 		setWebcamEnabled,
 		webcamDeviceId,
 		setWebcamDeviceId,
+		setWebcamDeviceName,
 	} = useScreenRecorder();
 
 	const showMicControls = microphoneEnabled && !recording;
@@ -169,10 +171,18 @@ export function LaunchWindow() {
 	}, [selectedMicId, setMicrophoneDeviceId]);
 
 	useEffect(() => {
+		setMicrophoneDeviceName(selectedMicLabel);
+	}, [selectedMicLabel, setMicrophoneDeviceName]);
+
+	useEffect(() => {
 		if (selectedCameraId) {
 			setWebcamDeviceId(selectedCameraId);
 		}
 	}, [selectedCameraId, setWebcamDeviceId]);
+
+	useEffect(() => {
+		setWebcamDeviceName(selectedCameraLabel);
+	}, [selectedCameraLabel, setWebcamDeviceName]);
 
 	useEffect(() => {
 		if (!import.meta.env.DEV) {

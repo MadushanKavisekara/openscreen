@@ -56,8 +56,22 @@ import {
 	type Size,
 	type StyledRenderRect,
 } from "@/lib/compositeLayout";
+import {
+	createNativeCursorMotionBlurState,
+	createNativeCursorSmoothingState,
+	getNativeCursorClickBounceProgress,
+	getNativeCursorClickBounceScale,
+	getNativeCursorMotionBlurPx,
+	hasNativeCursorRecordingData,
+	projectNativeCursorToLocal,
+	resetNativeCursorMotionBlurState,
+	resolveInterpolatedNativeCursorFrame,
+	resolveNativeCursorRenderAsset,
+	smoothNativeCursorSample,
+} from "@/lib/cursor/nativeCursor";
 import { BackgroundLoadError, classifyWallpaper, resolveImageWallpaperUrl } from "@/lib/wallpaper";
 import { drawCanvasClipPath } from "@/lib/webcamMaskShapes";
+import type { CursorRecordingData } from "@/native/contracts";
 import { renderAnnotations } from "./annotationRenderer";
 import {
 	getLinearGradientPoints,
@@ -93,6 +107,11 @@ interface FrameRenderConfig {
 	cursorTelemetry?: import("@/components/video-editor/types").CursorTelemetryPoint[];
 	cursorHighlight?: CursorHighlightConfig;
 	cursorClickTimestamps?: number[];
+	cursorRecordingData?: CursorRecordingData | null;
+	cursorScale?: number;
+	cursorSmoothing?: number;
+	cursorMotionBlur?: number;
+	cursorClickBounce?: number;
 	platform: string;
 }
 
@@ -141,6 +160,9 @@ export class FrameRenderer {
 	private layoutCache: LayoutCache | null = null;
 	private currentVideoTime = 0;
 	private motionBlurState: MotionBlurState = createMotionBlurState();
+	private nativeCursorSmoothingState = createNativeCursorSmoothingState();
+	private nativeCursorMotionBlurState = createNativeCursorMotionBlurState();
+	private nativeCursorImageCache = new Map<string, Promise<HTMLImageElement>>();
 	private smoothedAutoFocus: { cx: number; cy: number } | null = null;
 	private prevAnimationTimeMs: number | null = null;
 	private prevTargetProgress = 0;
@@ -360,6 +382,20 @@ export class FrameRenderer {
 		this.backgroundSprite = bgCanvas;
 	}
 
+	private loadNativeCursorImage(id: string, url: string): Promise<HTMLImageElement> {
+		const cached = this.nativeCursorImageCache.get(id);
+		if (cached) return cached;
+
+		const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+			const image = new Image();
+			image.onload = () => resolve(image);
+			image.onerror = () => reject(new Error(`Failed to load native cursor asset: ${id}`));
+			image.src = url;
+		});
+		this.nativeCursorImageCache.set(id, promise);
+		return promise;
+	}
+
 	async renderFrame(
 		videoFrame: VideoFrame,
 		timestamp: number,
@@ -465,6 +501,72 @@ export class FrameRenderer {
 					},
 					appliedScale * cursorScale,
 				);
+			}
+		}
+
+		if (
+			hasNativeCursorRecordingData(this.config.cursorRecordingData) &&
+			this.config.cursorScale !== undefined &&
+			this.config.cursorScale > 0 &&
+			this.foregroundCtx
+		) {
+			const frame = resolveInterpolatedNativeCursorFrame(this.config.cursorRecordingData, timeMs);
+			if (frame) {
+				const displaySample = smoothNativeCursorSample({
+					sample: frame.sample,
+					smoothing: this.config.cursorSmoothing ?? 0,
+					state: this.nativeCursorSmoothingState,
+					timeMs,
+				});
+				const localPoint = projectNativeCursorToLocal({
+					cropRegion: this.config.cropRegion,
+					maskRect: layoutCache.maskRect,
+					sample: displaySample,
+				});
+
+				if (localPoint) {
+					const renderAsset = resolveNativeCursorRenderAsset(frame.asset, 1, displaySample);
+					try {
+						const image = await this.loadNativeCursorImage(
+							renderAsset.id,
+							renderAsset.imageDataUrl,
+						);
+						const appliedScale = this.animationState.appliedScale;
+						const canvasX = localPoint.x * appliedScale + this.animationState.x;
+						const canvasY = localPoint.y * appliedScale + this.animationState.y;
+						const bounceProgress = getNativeCursorClickBounceProgress(
+							this.config.cursorRecordingData,
+							timeMs,
+						);
+						const cursorScale =
+							(this.config.cursorScale ?? 1) *
+							getNativeCursorClickBounceScale(this.config.cursorClickBounce ?? 0, bounceProgress);
+						const drawScale = cursorScale * appliedScale;
+						const width = renderAsset.width * drawScale;
+						const height = renderAsset.height * drawScale;
+						const x = canvasX - renderAsset.hotspotX * drawScale;
+						const y = canvasY - renderAsset.hotspotY * drawScale;
+						const blurPx = getNativeCursorMotionBlurPx({
+							motionBlur: this.config.cursorMotionBlur ?? 0,
+							point: { x: canvasX, y: canvasY },
+							state: this.nativeCursorMotionBlurState,
+							timeMs,
+						});
+
+						this.foregroundCtx.save();
+						if (blurPx > 0) {
+							this.foregroundCtx.filter = `blur(${blurPx.toFixed(2)}px)`;
+						}
+						this.foregroundCtx.drawImage(image, x, y, width, height);
+						this.foregroundCtx.restore();
+					} catch (error) {
+						console.warn("[FrameRenderer] Failed to draw native cursor:", error);
+					}
+				} else {
+					resetNativeCursorMotionBlurState(this.nativeCursorMotionBlurState);
+				}
+			} else {
+				resetNativeCursorMotionBlurState(this.nativeCursorMotionBlurState);
 			}
 		}
 

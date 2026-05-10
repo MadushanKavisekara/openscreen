@@ -16,6 +16,7 @@ import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
 import { type Locale } from "@/i18n/config";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
+import { hasNativeCursorRecordingData } from "@/lib/cursor/nativeCursor";
 import {
 	calculateOutputDimensions,
 	type ExportFormat,
@@ -38,6 +39,7 @@ import {
 	saveUserPreferences,
 } from "@/lib/userPreferences";
 import { BackgroundLoadError } from "@/lib/wallpaper";
+import type { CursorRecordingData } from "@/native/contracts";
 import {
 	getAspectRatioValue,
 	getNativeAspectRatioValue,
@@ -67,6 +69,10 @@ import {
 	DEFAULT_ANNOTATION_SIZE,
 	DEFAULT_ANNOTATION_STYLE,
 	DEFAULT_BLUR_DATA,
+	DEFAULT_CURSOR_CLICK_BOUNCE,
+	DEFAULT_CURSOR_MOTION_BLUR,
+	DEFAULT_CURSOR_SIZE,
+	DEFAULT_CURSOR_SMOOTHING,
 	DEFAULT_FIGURE_DATA,
 	DEFAULT_PLAYBACK_SPEED,
 	DEFAULT_ZOOM_DEPTH,
@@ -131,6 +137,13 @@ export default function VideoEditor() {
 	durationRef.current = duration;
 	const [cursorTelemetry, setCursorTelemetry] = useState<CursorTelemetryPoint[]>([]);
 	const [cursorClickTimestamps, setCursorClickTimestamps] = useState<number[]>([]);
+	const [cursorRecordingData, setCursorRecordingData] = useState<CursorRecordingData | null>(null);
+	const [showCursor, setShowCursor] = useState(true);
+	const [cursorSize, setCursorSize] = useState(DEFAULT_CURSOR_SIZE);
+	const [cursorSmoothing, setCursorSmoothing] = useState(DEFAULT_CURSOR_SMOOTHING);
+	const [cursorMotionBlur, setCursorMotionBlur] = useState(DEFAULT_CURSOR_MOTION_BLUR);
+	const [cursorClickBounce, setCursorClickBounce] = useState(DEFAULT_CURSOR_CLICK_BOUNCE);
+	const [nativePlatform, setNativePlatform] = useState<string | null>(null);
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
 	const [selectedTrimId, setSelectedTrimId] = useState<string | null>(null);
 	const [selectedSpeedId, setSelectedSpeedId] = useState<string | null>(null);
@@ -164,6 +177,8 @@ export default function VideoEditor() {
 	const nextSpeedIdRef = useRef(1);
 
 	const { shortcuts, isMac } = useShortcuts();
+	const hasNativeCursorData = hasNativeCursorRecordingData(cursorRecordingData);
+	const showNativeCursorSettings = nativePlatform === "win32" && hasNativeCursorData;
 	// Off-Mac doesn't have click telemetry, so force `onlyOnClicks` off for
 	// renderers while keeping the persisted value intact for round-tripping.
 	const effectiveCursorHighlight = useMemo(
@@ -621,6 +636,23 @@ export default function VideoEditor() {
 
 	useEffect(() => {
 		let mounted = true;
+		window.electronAPI
+			.getPlatform()
+			.then((platform) => {
+				if (mounted) setNativePlatform(platform);
+			})
+			.catch((platformError) => {
+				console.warn("Unable to resolve platform:", platformError);
+				if (mounted) setNativePlatform(null);
+			});
+
+		return () => {
+			mounted = false;
+		};
+	}, []);
+
+	useEffect(() => {
+		let mounted = true;
 
 		async function loadCursorTelemetry() {
 			const sourcePath = currentProjectMedia?.screenVideoPath ?? null;
@@ -629,21 +661,27 @@ export default function VideoEditor() {
 				if (mounted) {
 					setCursorTelemetry([]);
 					setCursorClickTimestamps([]);
+					setCursorRecordingData(null);
 				}
 				return;
 			}
 
 			try {
-				const result = await window.electronAPI.getCursorTelemetry(sourcePath);
+				const [result, recordingDataResult] = await Promise.all([
+					window.electronAPI.getCursorTelemetry(sourcePath),
+					window.electronAPI.getCursorRecordingData(sourcePath),
+				]);
 				if (mounted) {
 					setCursorTelemetry(result.success ? result.samples : []);
 					setCursorClickTimestamps(result.success ? (result.clicks ?? []) : []);
+					setCursorRecordingData(recordingDataResult.success ? recordingDataResult.data : null);
 				}
 			} catch (telemetryError) {
 				console.warn("Unable to load cursor telemetry:", telemetryError);
 				if (mounted) {
 					setCursorTelemetry([]);
 					setCursorClickTimestamps([]);
+					setCursorRecordingData(null);
 				}
 			}
 		}
@@ -1503,6 +1541,11 @@ export default function VideoEditor() {
 						cursorTelemetry,
 						cursorClickTimestamps,
 						cursorHighlight: effectiveCursorHighlight,
+						cursorRecordingData,
+						cursorScale: showCursor ? cursorSize : 0,
+						cursorSmoothing,
+						cursorMotionBlur,
+						cursorClickBounce,
 						onProgress: (progress: ExportProgress) => {
 							setExportProgress(progress);
 						},
@@ -1644,6 +1687,11 @@ export default function VideoEditor() {
 						cursorTelemetry,
 						cursorClickTimestamps,
 						cursorHighlight: effectiveCursorHighlight,
+						cursorRecordingData,
+						cursorScale: showCursor ? cursorSize : 0,
+						cursorSmoothing,
+						cursorMotionBlur,
+						cursorClickBounce,
 						onProgress: (progress: ExportProgress) => {
 							setExportProgress(progress);
 						},
@@ -1725,6 +1773,12 @@ export default function VideoEditor() {
 			cursorTelemetry,
 			cursorClickTimestamps,
 			effectiveCursorHighlight,
+			cursorRecordingData,
+			showCursor,
+			cursorSize,
+			cursorSmoothing,
+			cursorMotionBlur,
+			cursorClickBounce,
 			t,
 		],
 	);
@@ -1980,6 +2034,7 @@ export default function VideoEditor() {
 												borderRadius={borderRadius}
 												padding={padding}
 												cropRegion={cropRegion}
+												cursorRecordingData={cursorRecordingData}
 												trimRegions={trimRegions}
 												speedRegions={speedRegions}
 												annotationRegions={annotationOnlyRegions}
@@ -1997,6 +2052,11 @@ export default function VideoEditor() {
 												cursorTelemetry={cursorTelemetry}
 												cursorHighlight={effectiveCursorHighlight}
 												cursorClickTimestamps={cursorClickTimestamps}
+												showCursor={showCursor}
+												cursorSize={cursorSize}
+												cursorSmoothing={cursorSmoothing}
+												cursorMotionBlur={cursorMotionBlur}
+												cursorClickBounce={cursorClickBounce}
 											/>
 										</div>
 									</div>
@@ -2022,6 +2082,17 @@ export default function VideoEditor() {
 									cursorHighlight={cursorHighlight}
 									onCursorHighlightChange={(next) => pushState({ cursorHighlight: next })}
 									cursorHighlightSupportsClicks={isMac}
+									showNativeCursorSettings={showNativeCursorSettings}
+									showCursor={showCursor}
+									onShowCursorChange={setShowCursor}
+									cursorSize={cursorSize}
+									onCursorSizeChange={setCursorSize}
+									cursorSmoothing={cursorSmoothing}
+									onCursorSmoothingChange={setCursorSmoothing}
+									cursorMotionBlur={cursorMotionBlur}
+									onCursorMotionBlurChange={setCursorMotionBlur}
+									cursorClickBounce={cursorClickBounce}
+									onCursorClickBounceChange={setCursorClickBounce}
 									selected={wallpaper}
 									onWallpaperChange={(w) => pushState({ wallpaper: w })}
 									selectedZoomDepth={

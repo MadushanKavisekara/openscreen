@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
 import type { RecordingSession, StoreRecordedSessionInput } from "../src/lib/recordingSession";
 
 // Asset base URL is passed from the main process via webPreferences.additionalArguments
@@ -60,8 +61,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	setRecordingState: (recording: boolean, recordingId?: number) => {
 		return ipcRenderer.invoke("set-recording-state", recording, recordingId);
 	},
+	isNativeWindowsCaptureAvailable: () => {
+		return ipcRenderer.invoke("is-native-windows-capture-available");
+	},
+	startNativeWindowsRecording: (request: NativeWindowsRecordingRequest) => {
+		return ipcRenderer.invoke("start-native-windows-recording", request);
+	},
+	stopNativeWindowsRecording: (discard?: boolean) => {
+		return ipcRenderer.invoke("stop-native-windows-recording", discard);
+	},
 	getCursorTelemetry: (videoPath?: string) => {
 		return ipcRenderer.invoke("get-cursor-telemetry", videoPath);
+	},
+	getCursorRecordingData: (videoPath?: string) => {
+		return ipcRenderer.invoke("get-cursor-recording-data", videoPath);
 	},
 	discardCursorTelemetry: (recordingId: number) => {
 		return ipcRenderer.invoke("discard-cursor-telemetry", recordingId);

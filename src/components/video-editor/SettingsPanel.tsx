@@ -227,6 +227,17 @@ interface SettingsPanelProps {
 	) => void;
 	// macOS only — gates the "Only on clicks" toggle (needs uiohook).
 	cursorHighlightSupportsClicks?: boolean;
+	showNativeCursorSettings?: boolean;
+	showCursor?: boolean;
+	onShowCursorChange?: (showCursor: boolean) => void;
+	cursorSize?: number;
+	onCursorSizeChange?: (size: number) => void;
+	cursorSmoothing?: number;
+	onCursorSmoothingChange?: (smoothing: number) => void;
+	cursorMotionBlur?: number;
+	onCursorMotionBlurChange?: (motionBlur: number) => void;
+	cursorClickBounce?: number;
+	onCursorClickBounceChange?: (clickBounce: number) => void;
 	selected: string;
 	onWallpaperChange: (path: string) => void;
 	selectedZoomDepth?: ZoomDepth | null;
@@ -328,6 +339,17 @@ export function SettingsPanel({
 	cursorHighlight,
 	onCursorHighlightChange,
 	cursorHighlightSupportsClicks = false,
+	showNativeCursorSettings = false,
+	showCursor = true,
+	onShowCursorChange,
+	cursorSize = 3,
+	onCursorSizeChange,
+	cursorSmoothing = 0.67,
+	onCursorSmoothingChange,
+	cursorMotionBlur = 0.35,
+	onCursorMotionBlurChange,
+	cursorClickBounce = 2.5,
+	onCursorClickBounceChange,
 	selected,
 	onWallpaperChange,
 	selectedZoomDepth,
@@ -1372,6 +1394,97 @@ export function SettingsPanel({
 													</div>
 												</div>
 											</>
+										)}
+
+										{activePanelMode === "cursor" && showNativeCursorSettings && (
+											<div className="p-2 rounded-lg editor-control-surface mt-2 space-y-2">
+												<div className="flex items-center justify-between">
+													<div className="text-[10px] font-medium text-slate-300">
+														Windows cursor
+													</div>
+													<button
+														type="button"
+														onClick={() => onShowCursorChange?.(!showCursor)}
+														className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+															showCursor
+																? "bg-[#34B27B]/20 border-[#34B27B]/50 text-[#34B27B]"
+																: "bg-white/5 border-white/10 text-slate-400"
+														}`}
+													>
+														{showCursor ? t("effects.on") : t("effects.off")}
+													</button>
+												</div>
+												<div
+													className={
+														showCursor ? "space-y-2" : "space-y-2 opacity-40 pointer-events-none"
+													}
+												>
+													<div>
+														<div className="flex items-center justify-between mb-1">
+															<div className="text-[10px] text-slate-400">Size</div>
+															<span className="text-[10px] text-slate-500 font-mono">
+																{cursorSize.toFixed(1)}x
+															</span>
+														</div>
+														<Slider
+															value={[cursorSize]}
+															onValueChange={(values) => onCursorSizeChange?.(values[0])}
+															min={0.5}
+															max={5}
+															step={0.1}
+															className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B] [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center justify-between mb-1">
+															<div className="text-[10px] text-slate-400">Smoothing</div>
+															<span className="text-[10px] text-slate-500 font-mono">
+																{Math.round(cursorSmoothing * 100)}%
+															</span>
+														</div>
+														<Slider
+															value={[cursorSmoothing]}
+															onValueChange={(values) => onCursorSmoothingChange?.(values[0])}
+															min={0}
+															max={0.98}
+															step={0.01}
+															className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B] [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center justify-between mb-1">
+															<div className="text-[10px] text-slate-400">Motion blur</div>
+															<span className="text-[10px] text-slate-500 font-mono">
+																{Math.round(cursorMotionBlur * 100)}%
+															</span>
+														</div>
+														<Slider
+															value={[cursorMotionBlur]}
+															onValueChange={(values) => onCursorMotionBlurChange?.(values[0])}
+															min={0}
+															max={1}
+															step={0.01}
+															className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B] [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+														/>
+													</div>
+													<div>
+														<div className="flex items-center justify-between mb-1">
+															<div className="text-[10px] text-slate-400">Click bounce</div>
+															<span className="text-[10px] text-slate-500 font-mono">
+																{cursorClickBounce.toFixed(1)}
+															</span>
+														</div>
+														<Slider
+															value={[cursorClickBounce]}
+															onValueChange={(values) => onCursorClickBounceChange?.(values[0])}
+															min={0}
+															max={5}
+															step={0.1}
+															className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B] [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
+														/>
+													</div>
+												</div>
+											</div>
 										)}
 
 										{activePanelMode === "cursor" && cursorHighlight && onCursorHighlightChange && (

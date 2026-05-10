@@ -1,3 +1,5 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -6,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const nodeRequire = createRequire(import.meta.url);
 
+import type { DesktopCapturerSource } from "electron";
 import {
 	app,
 	BrowserWindow,
@@ -20,15 +23,20 @@ import {
 	type CursorTelemetryPoint,
 	createCursorTelemetryBuffer,
 } from "../../src/lib/cursorTelemetryBuffer";
+import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
+	type CursorCaptureMode,
+	normalizeCursorCaptureMode,
 	normalizeProjectMedia,
 	normalizeRecordingSession,
 	type ProjectMedia,
 	type RecordingSession,
 	type StoreRecordedSessionInput,
 } from "../../src/lib/recordingSession";
+import type { CursorRecordingData, CursorRecordingSample } from "../../src/native/contracts";
 import { mainT } from "../i18n";
 import { RECORDINGS_DIR } from "../main";
+import { WindowsNativeRecordingSession } from "../native-bridge/cursor/recording/windowsNativeRecordingSession";
 
 const PROJECT_FILE_EXTENSION = "openscreen";
 const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
@@ -192,8 +200,19 @@ type SelectedSource = {
 };
 
 let selectedSource: SelectedSource | null = null;
+let selectedDesktopSource: DesktopCapturerSource | null = null;
+let lastEnumeratedSources = new Map<string, DesktopCapturerSource>();
 let currentProjectPath: string | null = null;
 let currentRecordingSession: RecordingSession | null = null;
+
+/**
+ * Returns the exact DesktopCapturerSource chosen during enumeration. On Windows
+ * this lets Electron's display-media handler use the selected source without
+ * opening the OS picker or changing non-Windows capture behavior.
+ */
+export function getSelectedDesktopSource(): DesktopCapturerSource | null {
+	return selectedDesktopSource;
+}
 
 function normalizePath(filePath: string) {
 	return path.resolve(filePath);
@@ -283,6 +302,7 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 		typeof payload.createdAt === "number" && Number.isFinite(payload.createdAt)
 			? payload.createdAt
 			: Date.now();
+	const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
 	const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
 	await fs.writeFile(screenVideoPath, Buffer.from(payload.screen.videoData));
 
@@ -293,8 +313,13 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 	}
 
 	const session: RecordingSession = webcamVideoPath
-		? { screenVideoPath, webcamVideoPath, createdAt }
-		: { screenVideoPath, createdAt };
+		? {
+				screenVideoPath,
+				webcamVideoPath,
+				createdAt,
+				...(cursorCaptureMode ? { cursorCaptureMode } : {}),
+			}
+		: { screenVideoPath, createdAt, ...(cursorCaptureMode ? { cursorCaptureMode } : {}) };
 	setCurrentRecordingSessionState(session);
 	currentProjectPath = null;
 
@@ -339,12 +364,24 @@ async function storeRecordedSessionFiles(payload: StoreRecordedSessionInput) {
 const CURSOR_TELEMETRY_VERSION = 1;
 const CURSOR_SAMPLE_INTERVAL_MS = 100;
 const MAX_CURSOR_SAMPLES = 60 * 60 * 10; // 1 hour @ 10Hz
+const NATIVE_CURSOR_SAMPLE_INTERVAL_MS = 33;
+const MAX_NATIVE_CURSOR_SAMPLES = 60 * 60 * 30; // 1 hour @ ~30Hz
 
 let cursorCaptureInterval: NodeJS.Timeout | null = null;
 let cursorCaptureStartTimeMs = 0;
 const cursorTelemetryBuffer = createCursorTelemetryBuffer({
 	maxActiveSamples: MAX_CURSOR_SAMPLES,
 });
+let nativeCursorRecordingSession: WindowsNativeRecordingSession | null = null;
+let pendingNativeCursorRecordingData: CursorRecordingData | null = null;
+let nativeWindowsCaptureProcess: ChildProcessWithoutNullStreams | null = null;
+let nativeWindowsCaptureOutput = "";
+let nativeWindowsCaptureTargetPath: string | null = null;
+let nativeWindowsCaptureWebcamTargetPath: string | null = null;
+let nativeWindowsCaptureRecordingId: number | null = null;
+let nativeWindowsCaptureCursorMode: CursorCaptureMode = "editable-overlay";
+let nativeWindowsCursorOffsetMs = 0;
+const NATIVE_WINDOWS_CAPTURE_STOP_TIMEOUT_MS = 15_000;
 
 // Mouse click timestamps (macOS only — uiohook-napi behind Accessibility).
 const MAX_CURSOR_CLICKS = 60 * 60 * 60; // ~1 click/sec for an hour
@@ -474,6 +511,444 @@ function sampleCursorPoint() {
 		timeMs: Math.max(0, Date.now() - cursorCaptureStartTimeMs),
 		cx,
 		cy,
+	});
+}
+
+function normalizeCursorRecordingSample(sample: unknown): CursorRecordingSample | null {
+	if (!sample || typeof sample !== "object") return null;
+	const point = sample as Partial<CursorRecordingSample>;
+	const timeMs =
+		typeof point.timeMs === "number" && Number.isFinite(point.timeMs)
+			? Math.max(0, point.timeMs)
+			: 0;
+	const cx = typeof point.cx === "number" && Number.isFinite(point.cx) ? point.cx : 0.5;
+	const cy = typeof point.cy === "number" && Number.isFinite(point.cy) ? point.cy : 0.5;
+	const interactionType =
+		point.interactionType === "click" ||
+		point.interactionType === "mouseup" ||
+		point.interactionType === "move"
+			? point.interactionType
+			: undefined;
+
+	return {
+		timeMs,
+		cx,
+		cy,
+		...(typeof point.assetId === "string" || point.assetId === null
+			? { assetId: point.assetId }
+			: {}),
+		...(typeof point.visible === "boolean" ? { visible: point.visible } : {}),
+		...(typeof point.cursorType === "string" || point.cursorType === null
+			? { cursorType: point.cursorType }
+			: {}),
+		...(interactionType ? { interactionType } : {}),
+	};
+}
+
+function normalizeCursorRecordingData(parsed: unknown): CursorRecordingData {
+	const source = parsed && typeof parsed === "object" ? parsed : {};
+	const rawSamples = Array.isArray(parsed)
+		? parsed
+		: Array.isArray((source as { samples?: unknown }).samples)
+			? (source as { samples: unknown[] }).samples
+			: [];
+	const rawAssets = Array.isArray((source as { assets?: unknown }).assets)
+		? (source as { assets: unknown[] }).assets
+		: [];
+
+	const samples = rawSamples
+		.map(normalizeCursorRecordingSample)
+		.filter((sample): sample is CursorRecordingSample => Boolean(sample))
+		.sort((a, b) => a.timeMs - b.timeMs);
+	const assets = rawAssets
+		.filter((asset): asset is Partial<CursorRecordingData["assets"][number]> =>
+			Boolean(asset && typeof asset === "object"),
+		)
+		.map((asset) => ({
+			id: typeof asset.id === "string" ? asset.id : "",
+			platform:
+				asset.platform === "darwin" || asset.platform === "linux" || asset.platform === "win32"
+					? asset.platform
+					: "win32",
+			imageDataUrl: typeof asset.imageDataUrl === "string" ? asset.imageDataUrl : "",
+			width:
+				typeof asset.width === "number" && Number.isFinite(asset.width)
+					? Math.max(1, asset.width)
+					: 1,
+			height:
+				typeof asset.height === "number" && Number.isFinite(asset.height)
+					? Math.max(1, asset.height)
+					: 1,
+			hotspotX:
+				typeof asset.hotspotX === "number" && Number.isFinite(asset.hotspotX) ? asset.hotspotX : 0,
+			hotspotY:
+				typeof asset.hotspotY === "number" && Number.isFinite(asset.hotspotY) ? asset.hotspotY : 0,
+			...(typeof asset.scaleFactor === "number" && Number.isFinite(asset.scaleFactor)
+				? { scaleFactor: asset.scaleFactor }
+				: {}),
+			...(typeof asset.cursorType === "string" || asset.cursorType === null
+				? { cursorType: asset.cursorType }
+				: {}),
+		}))
+		.filter((asset) => asset.id && asset.imageDataUrl);
+
+	const hasNativeAssets = assets.length > 0 && samples.some((sample) => sample.assetId);
+	return {
+		version:
+			typeof (source as { version?: unknown }).version === "number"
+				? (source as { version: number }).version
+				: Array.isArray(parsed)
+					? CURSOR_TELEMETRY_VERSION
+					: 2,
+		provider: hasNativeAssets ? "native" : "none",
+		samples,
+		assets,
+	};
+}
+
+async function readCursorRecordingData(videoPath: string): Promise<CursorRecordingData | null> {
+	const telemetryPath = `${videoPath}.cursor.json`;
+	const content = await fs.readFile(telemetryPath, "utf-8");
+	return normalizeCursorRecordingData(JSON.parse(content));
+}
+
+async function startNativeCursorRecording(sourceId?: string | null, startTimeMs?: number) {
+	if (nativeCursorRecordingSession) {
+		pendingNativeCursorRecordingData = await nativeCursorRecordingSession.stop();
+		nativeCursorRecordingSession = null;
+	}
+
+	pendingNativeCursorRecordingData = null;
+	if (process.platform !== "win32") {
+		return;
+	}
+
+	const session = new WindowsNativeRecordingSession({
+		getDisplayBounds: getSelectedSourceBounds,
+		maxSamples: MAX_NATIVE_CURSOR_SAMPLES,
+		sampleIntervalMs: NATIVE_CURSOR_SAMPLE_INTERVAL_MS,
+		sourceId,
+		startTimeMs,
+	});
+	nativeCursorRecordingSession = session;
+
+	try {
+		await session.start();
+	} catch (error) {
+		console.error("Failed to start native Windows cursor recording:", error);
+		nativeCursorRecordingSession = null;
+	}
+}
+
+async function stopNativeCursorRecording() {
+	if (!nativeCursorRecordingSession) {
+		return;
+	}
+
+	try {
+		pendingNativeCursorRecordingData = await nativeCursorRecordingSession.stop();
+	} catch (error) {
+		console.error("Failed to stop native Windows cursor recording:", error);
+		pendingNativeCursorRecordingData = null;
+	} finally {
+		nativeCursorRecordingSession = null;
+	}
+}
+
+async function writePendingNativeCursorRecording(videoPath: string) {
+	const data = pendingNativeCursorRecordingData;
+	pendingNativeCursorRecordingData = null;
+	if (!data || data.samples.length === 0) {
+		return;
+	}
+
+	await fs.writeFile(`${videoPath}.cursor.json`, JSON.stringify(data, null, 2), "utf-8");
+}
+
+function shiftPendingNativeCursorRecording(offsetMs: number) {
+	if (!pendingNativeCursorRecordingData || !Number.isFinite(offsetMs) || offsetMs <= 0) {
+		return;
+	}
+
+	pendingNativeCursorRecordingData = {
+		...pendingNativeCursorRecordingData,
+		samples: pendingNativeCursorRecordingData.samples
+			.map((sample) => ({
+				...sample,
+				timeMs: Math.max(0, sample.timeMs - offsetMs),
+			}))
+			.sort((a, b) => a.timeMs - b.timeMs),
+	};
+}
+
+function getSelectedDisplay() {
+	const sourceDisplayId = Number(selectedSource?.display_id);
+	if (!Number.isFinite(sourceDisplayId)) {
+		return null;
+	}
+
+	return screen.getAllDisplays().find((display) => display.id === sourceDisplayId) ?? null;
+}
+
+function getSelectedSourceBounds() {
+	const display =
+		getSelectedDisplay() ?? screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+	return display.bounds;
+}
+
+function resolveUnpackedAppPath(...segments: string[]) {
+	const resolved = path.join(app.getAppPath(), ...segments);
+	if (app.isPackaged) {
+		return resolved.replace(/\.asar([/\\])/, ".asar.unpacked$1");
+	}
+
+	return resolved;
+}
+
+function resolvePackagedResourcePath(...segments: string[]) {
+	if (!app.isPackaged) {
+		return null;
+	}
+
+	return path.join(process.resourcesPath, ...segments);
+}
+
+function getNativeWindowsCaptureHelperCandidates() {
+	const envPath = process.env.OPENSCREEN_WGC_CAPTURE_EXE?.trim();
+	const archTag = process.arch === "arm64" ? "win32-arm64" : "win32-x64";
+	return [
+		envPath,
+		resolveUnpackedAppPath(
+			"electron",
+			"native",
+			"wgc-capture",
+			"build",
+			"Release",
+			"wgc-capture.exe",
+		),
+		resolveUnpackedAppPath("electron", "native", "wgc-capture", "build", "wgc-capture.exe"),
+		resolveUnpackedAppPath("electron", "native", "bin", archTag, "wgc-capture.exe"),
+		resolvePackagedResourcePath("electron", "native", "bin", archTag, "wgc-capture.exe"),
+	].filter((candidate): candidate is string => Boolean(candidate));
+}
+
+async function findNativeWindowsCaptureHelperPath() {
+	if (process.platform !== "win32") {
+		return null;
+	}
+
+	for (const candidate of getNativeWindowsCaptureHelperCandidates()) {
+		try {
+			await fs.access(candidate, fsConstants.X_OK);
+			return candidate;
+		} catch {
+			// Try the next configured helper location.
+		}
+	}
+
+	return null;
+}
+
+function isWindowsGraphicsCaptureOsSupported() {
+	if (process.platform !== "win32") {
+		return false;
+	}
+
+	const [, , build] = process.getSystemVersion().split(".").map(Number);
+	return Number.isFinite(build) && build >= 19041;
+}
+
+function normalizeNativeDeviceName(value: string) {
+	return value
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function scoreNativeDeviceName(candidateName: string, candidateId: string, requestedName?: string) {
+	const candidate = normalizeNativeDeviceName(candidateName);
+	const id = normalizeNativeDeviceName(candidateId);
+	const requested = normalizeNativeDeviceName(requestedName ?? "");
+	if (!requested) {
+		return 0;
+	}
+	if (candidate === requested) {
+		return 1000;
+	}
+	if (candidate.includes(requested) || requested.includes(candidate)) {
+		return 900;
+	}
+	if (id.includes(requested) || requested.includes(id)) {
+		return 800;
+	}
+
+	return requested
+		.split(/\s+/)
+		.filter((word) => word.length > 1 && !["camera", "webcam", "video", "input"].includes(word))
+		.reduce((score, word) => {
+			if (candidate.includes(word)) return score + 100;
+			if (id.includes(word)) return score + 50;
+			return score;
+		}, 0);
+}
+
+function queryDirectShowVideoInputRegistry() {
+	return new Promise<string>((resolve) => {
+		const proc = spawn(
+			"reg.exe",
+			["query", "HKCR\\CLSID\\{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\Instance", "/s"],
+			{ windowsHide: true },
+		);
+		let stdout = "";
+		proc.stdout.on("data", (chunk: Buffer) => {
+			stdout += chunk.toString("utf16le").includes("\u0000")
+				? chunk.toString("utf16le")
+				: chunk.toString();
+		});
+		proc.on("close", () => resolve(stdout));
+		proc.on("error", () => resolve(""));
+	});
+}
+
+async function resolveDirectShowWebcamClsid(deviceName?: string) {
+	if (process.platform !== "win32" || !deviceName?.trim()) {
+		return null;
+	}
+
+	const output = await queryDirectShowVideoInputRegistry();
+	let current: { friendlyName?: string; clsid?: string } = {};
+	const entries: Array<{ friendlyName?: string; clsid?: string }> = [];
+	for (const rawLine of output.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (!line) continue;
+		if (/^HKEY_/i.test(line)) {
+			if (current.friendlyName || current.clsid) entries.push(current);
+			current = {};
+			continue;
+		}
+		const match = line.match(/^(\S+)\s+REG_SZ\s+(.+)$/);
+		if (!match) continue;
+		if (match[1] === "FriendlyName") current.friendlyName = match[2].trim();
+		if (match[1] === "CLSID") current.clsid = match[2].trim();
+	}
+	if (current.friendlyName || current.clsid) entries.push(current);
+
+	let best: { clsid: string; friendlyName?: string; score: number } | null = null;
+	for (const entry of entries) {
+		if (!entry.clsid) continue;
+		const score = scoreNativeDeviceName(entry.friendlyName ?? "", entry.clsid, deviceName);
+		if (!best || score > best.score) {
+			best = { clsid: entry.clsid, friendlyName: entry.friendlyName, score };
+		}
+	}
+
+	if (!best || best.score <= 0) {
+		return null;
+	}
+
+	console.info("[native-wgc] resolved DirectShow webcam filter", {
+		requestedName: deviceName,
+		filterName: best.friendlyName,
+		clsid: best.clsid,
+		score: best.score,
+	});
+	return best.clsid;
+}
+
+function waitForNativeWindowsCaptureStart(proc: ChildProcessWithoutNullStreams) {
+	return new Promise<void>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			cleanup();
+			reject(new Error("Timed out waiting for native Windows capture to start"));
+		}, 12_000);
+
+		const onOutput = (chunk: Buffer) => {
+			nativeWindowsCaptureOutput += chunk.toString();
+			if (nativeWindowsCaptureOutput.includes("Recording started")) {
+				cleanup();
+				resolve();
+			}
+		};
+		const onError = (error: Error) => {
+			cleanup();
+			reject(error);
+		};
+		const onExit = (code: number | null) => {
+			cleanup();
+			reject(
+				new Error(
+					nativeWindowsCaptureOutput.trim() ||
+						`Native Windows capture exited before recording started (code=${code ?? "unknown"})`,
+				),
+			);
+		};
+		const cleanup = () => {
+			clearTimeout(timer);
+			proc.stdout.off("data", onOutput);
+			proc.stderr.off("data", onOutput);
+			proc.off("error", onError);
+			proc.off("exit", onExit);
+		};
+
+		proc.stdout.on("data", onOutput);
+		proc.stderr.on("data", onOutput);
+		proc.once("error", onError);
+		proc.once("exit", onExit);
+	});
+}
+
+function waitForNativeWindowsCaptureStop(proc: ChildProcessWithoutNullStreams) {
+	return new Promise<string>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			cleanup();
+			if (!proc.killed) {
+				proc.kill();
+			}
+			reject(
+				new Error(
+					`Timed out waiting for native Windows capture to stop. Output path: ${
+						nativeWindowsCaptureTargetPath ?? "unknown"
+					}. Output: ${nativeWindowsCaptureOutput.trim()}`,
+				),
+			);
+		}, NATIVE_WINDOWS_CAPTURE_STOP_TIMEOUT_MS);
+		const onOutput = (chunk: Buffer) => {
+			nativeWindowsCaptureOutput += chunk.toString();
+		};
+		const onClose = (code: number | null) => {
+			cleanup();
+			const match = nativeWindowsCaptureOutput.match(/Recording stopped\. Output path: (.+)/);
+			if (match?.[1]) {
+				resolve(match[1].trim());
+				return;
+			}
+			if (code === 0 && nativeWindowsCaptureTargetPath) {
+				resolve(nativeWindowsCaptureTargetPath);
+				return;
+			}
+			reject(
+				new Error(
+					nativeWindowsCaptureOutput.trim() ||
+						`Native Windows capture exited with code=${code ?? "unknown"}`,
+				),
+			);
+		};
+		const onError = (error: Error) => {
+			cleanup();
+			reject(error);
+		};
+		const cleanup = () => {
+			clearTimeout(timer);
+			proc.stdout.off("data", onOutput);
+			proc.stderr.off("data", onOutput);
+			proc.off("close", onClose);
+			proc.off("error", onError);
+		};
+
+		proc.stdout.on("data", onOutput);
+		proc.stderr.on("data", onOutput);
+		proc.once("close", onClose);
+		proc.once("error", onError);
 	});
 }
 
@@ -662,19 +1137,38 @@ export function registerIpcHandlers(
 				.filter((id): id is string => Boolean(id)),
 		);
 		const sources = await desktopCapturer.getSources(opts);
-		return sources
+		const visibleSources = sources
 			.filter((source) => !ownWindowSourceIds.has(source.id))
-			.map((source) => ({
-				id: source.id,
-				name: source.name,
-				display_id: source.display_id,
-				thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null,
-				appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
-			}));
+			.map((source) => source);
+		lastEnumeratedSources = new Map(visibleSources.map((source) => [source.id, source]));
+		return visibleSources.map((source) => ({
+			id: source.id,
+			name: source.name,
+			display_id: source.display_id,
+			thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null,
+			appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
+		}));
 	});
 
-	ipcMain.handle("select-source", (_, source: SelectedSource) => {
+	ipcMain.handle("select-source", async (_, source: SelectedSource) => {
 		selectedSource = source;
+		selectedDesktopSource =
+			typeof source.id === "string" ? (lastEnumeratedSources.get(source.id) ?? null) : null;
+
+		if (!selectedDesktopSource && typeof source.id === "string") {
+			try {
+				const sources = await desktopCapturer.getSources({
+					types: ["screen", "window"],
+					thumbnailSize: { width: 0, height: 0 },
+					fetchWindowIcons: true,
+				});
+				lastEnumeratedSources = new Map(sources.map((candidate) => [candidate.id, candidate]));
+				selectedDesktopSource = lastEnumeratedSources.get(source.id) ?? null;
+			} catch {
+				selectedDesktopSource = null;
+			}
+		}
+
 		const sourceSelectorWin = getSourceSelectorWindow();
 		if (sourceSelectorWin) {
 			sourceSelectorWin.close();
@@ -733,7 +1227,9 @@ export function registerIpcHandlers(
 			// is triggered by desktopCapturer.getSources(). Fire it and return so
 			// the renderer can re-check status after the user responds.
 			if (status === "not-determined") {
-				desktopCapturer.getSources({ types: ["screen"] }).catch(() => {});
+				desktopCapturer.getSources({ types: ["screen"] }).catch(() => {
+					// The permission prompt is best-effort; the renderer re-checks status.
+				});
 				return { success: true, granted: false, status: "not-determined" };
 			}
 
@@ -777,6 +1273,266 @@ export function registerIpcHandlers(
 		createEditorWindow();
 	});
 
+	ipcMain.handle("is-native-windows-capture-available", async () => {
+		if (!isWindowsGraphicsCaptureOsSupported()) {
+			return { success: true, available: false, reason: "unsupported-os" };
+		}
+
+		const helperPath = await findNativeWindowsCaptureHelperPath();
+		return helperPath
+			? { success: true, available: true, helperPath }
+			: { success: true, available: false, reason: "missing-helper" };
+	});
+
+	ipcMain.handle(
+		"start-native-windows-recording",
+		async (_, request: NativeWindowsRecordingRequest) => {
+			try {
+				if (!isWindowsGraphicsCaptureOsSupported()) {
+					return {
+						success: false,
+						error: "Windows Graphics Capture requires Windows 10 build 19041 or newer.",
+					};
+				}
+				if (nativeWindowsCaptureProcess) {
+					return { success: false, error: "Native Windows capture is already running." };
+				}
+
+				const helperPath = await findNativeWindowsCaptureHelperPath();
+				if (!helperPath) {
+					return { success: false, error: "Native Windows capture helper is not available." };
+				}
+
+				if (!request?.source?.sourceId) {
+					return {
+						success: false,
+						error: "Native Windows capture request is missing a source.",
+					};
+				}
+
+				const recordingId =
+					typeof request.recordingId === "number" && Number.isFinite(request.recordingId)
+						? request.recordingId
+						: Date.now();
+				const outputPath = path.join(RECORDINGS_DIR, `recording-${recordingId}.mp4`);
+				const webcamOutputPath = path.join(RECORDINGS_DIR, `recording-${recordingId}-webcam.mp4`);
+				const cursorCaptureMode =
+					normalizeCursorCaptureMode(request.cursor?.mode) ?? "editable-overlay";
+				const sourceDisplay =
+					request.source.type === "display" && typeof request.source.displayId === "number"
+						? (screen.getAllDisplays().find((display) => display.id === request.source.displayId) ??
+							null)
+						: getSelectedDisplay();
+				const bounds = sourceDisplay?.bounds ?? getSelectedSourceBounds();
+				const displayId =
+					typeof request.source.displayId === "number" && Number.isFinite(request.source.displayId)
+						? request.source.displayId
+						: Number(selectedSource?.display_id);
+				const webcamDirectShowClsid = request.webcam.enabled
+					? await resolveDirectShowWebcamClsid(request.webcam.deviceName)
+					: null;
+				const config = {
+					schemaVersion: 2,
+					recordingId,
+					outputPath,
+					sourceType: request.source.type,
+					sourceId: request.source.sourceId,
+					displayId: Number.isFinite(displayId) ? displayId : 0,
+					windowHandle: request.source.windowHandle ?? null,
+					fps: request.video.fps,
+					videoWidth: request.video.width,
+					videoHeight: request.video.height,
+					displayX: bounds.x,
+					displayY: bounds.y,
+					displayW: bounds.width,
+					displayH: bounds.height,
+					hasDisplayBounds: true,
+					captureSystemAudio: request.audio.system.enabled,
+					captureMic: request.audio.microphone.enabled,
+					microphoneDeviceId: request.audio.microphone.deviceId ?? null,
+					microphoneDeviceName: request.audio.microphone.deviceName ?? null,
+					microphoneGain: request.audio.microphone.gain,
+					webcamEnabled: request.webcam.enabled,
+					webcamDeviceId: request.webcam.deviceId ?? null,
+					webcamDeviceName: request.webcam.deviceName ?? null,
+					webcamDirectShowClsid,
+					webcamWidth: request.webcam.width,
+					webcamHeight: request.webcam.height,
+					webcamFps: request.webcam.fps,
+					captureCursor: cursorCaptureMode === "system",
+					cursorCaptureMode,
+					outputs: {
+						screenPath: outputPath,
+						webcamPath: webcamOutputPath,
+					},
+					source: {
+						type: request.source.type,
+						sourceId: request.source.sourceId,
+						displayId: Number.isFinite(displayId) ? displayId : null,
+						windowHandle: request.source.windowHandle ?? null,
+						bounds,
+					},
+					video: request.video,
+					audio: request.audio,
+					webcam: request.webcam,
+					cursor: {
+						mode: cursorCaptureMode,
+					},
+				};
+
+				console.info("[native-wgc] starting Windows capture", {
+					helperPath,
+					source: request.source,
+					audio: request.audio,
+					webcam: request.webcam,
+					bounds,
+					outputPath,
+				});
+
+				await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+				nativeWindowsCaptureOutput = "";
+				nativeWindowsCaptureTargetPath = outputPath;
+				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
+				nativeWindowsCaptureRecordingId = recordingId;
+				nativeWindowsCaptureCursorMode = cursorCaptureMode;
+				nativeWindowsCursorOffsetMs = 0;
+
+				const cursorStartTimeMs = Date.now();
+				if (cursorCaptureMode === "editable-overlay") {
+					await startNativeCursorRecording(request.source.sourceId, cursorStartTimeMs);
+				}
+
+				const proc = spawn(helperPath, [JSON.stringify(config)], {
+					cwd: RECORDINGS_DIR,
+					stdio: ["pipe", "pipe", "pipe"],
+					windowsHide: true,
+				});
+				nativeWindowsCaptureProcess = proc;
+
+				await waitForNativeWindowsCaptureStart(proc);
+				nativeWindowsCursorOffsetMs =
+					cursorCaptureMode === "editable-overlay"
+						? Math.max(0, Date.now() - cursorStartTimeMs)
+						: 0;
+
+				const source = selectedSource || { name: "Screen" };
+				if (onRecordingStateChange) {
+					onRecordingStateChange(true, source.name);
+				}
+
+				return {
+					success: true,
+					recordingId,
+					path: outputPath,
+					helperPath,
+				};
+			} catch (error) {
+				console.error("Failed to start native Windows recording:", error);
+				nativeWindowsCaptureProcess?.kill();
+				nativeWindowsCaptureProcess = null;
+				nativeWindowsCaptureTargetPath = null;
+				nativeWindowsCaptureWebcamTargetPath = null;
+				nativeWindowsCaptureRecordingId = null;
+				nativeWindowsCursorOffsetMs = 0;
+				pendingNativeCursorRecordingData = null;
+				await stopNativeCursorRecording();
+				return { success: false, error: String(error) };
+			}
+		},
+	);
+
+	ipcMain.handle("stop-native-windows-recording", async (_, discard?: boolean) => {
+		const proc = nativeWindowsCaptureProcess;
+		const preferredPath = nativeWindowsCaptureTargetPath;
+		const preferredWebcamPath = nativeWindowsCaptureWebcamTargetPath;
+		const recordingId = nativeWindowsCaptureRecordingId ?? Date.now();
+
+		if (!proc) {
+			return { success: false, error: "Native Windows capture is not running." };
+		}
+
+		try {
+			const stoppedPathPromise = waitForNativeWindowsCaptureStop(proc);
+			proc.stdin.write("stop\n");
+			const stoppedPath = await stoppedPathPromise;
+			const screenVideoPath = stoppedPath || preferredPath;
+			if (!screenVideoPath) {
+				throw new Error("Native Windows capture did not return an output path.");
+			}
+
+			await stopNativeCursorRecording();
+			if (discard) {
+				pendingNativeCursorRecordingData = null;
+				await Promise.all([
+					fs.rm(screenVideoPath, { force: true }),
+					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
+					preferredWebcamPath ? fs.rm(preferredWebcamPath, { force: true }) : Promise.resolve(),
+				]);
+				return { success: true, discarded: true };
+			}
+
+			if (nativeWindowsCaptureCursorMode === "editable-overlay") {
+				shiftPendingNativeCursorRecording(nativeWindowsCursorOffsetMs);
+				await writePendingNativeCursorRecording(screenVideoPath);
+			} else {
+				pendingNativeCursorRecordingData = null;
+			}
+
+			let webcamVideoPath: string | undefined;
+			if (preferredWebcamPath) {
+				try {
+					await fs.access(preferredWebcamPath, fsConstants.R_OK);
+					webcamVideoPath = preferredWebcamPath;
+				} catch {
+					webcamVideoPath = undefined;
+				}
+			}
+
+			const session: RecordingSession = webcamVideoPath
+				? {
+						screenVideoPath,
+						webcamVideoPath,
+						createdAt: recordingId,
+						cursorCaptureMode: nativeWindowsCaptureCursorMode,
+					}
+				: {
+						screenVideoPath,
+						createdAt: recordingId,
+						cursorCaptureMode: nativeWindowsCaptureCursorMode,
+					};
+			setCurrentRecordingSessionState(session);
+			currentProjectPath = null;
+
+			const sessionManifestPath = path.join(
+				RECORDINGS_DIR,
+				`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
+			);
+			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+
+			return {
+				success: true,
+				path: screenVideoPath,
+				session,
+				message: "Native Windows recording session stored successfully",
+			};
+		} catch (error) {
+			console.error("Failed to stop native Windows recording:", error);
+			await stopNativeCursorRecording();
+			return { success: false, error: String(error) };
+		} finally {
+			nativeWindowsCaptureProcess = null;
+			nativeWindowsCaptureTargetPath = null;
+			nativeWindowsCaptureWebcamTargetPath = null;
+			nativeWindowsCaptureRecordingId = null;
+			nativeWindowsCaptureCursorMode = "editable-overlay";
+			nativeWindowsCursorOffsetMs = 0;
+			const source = selectedSource || { name: "Screen" };
+			if (onRecordingStateChange) {
+				onRecordingStateChange(false, source.name);
+			}
+		}
+	});
+
 	ipcMain.handle("store-recorded-session", async (_, payload: StoreRecordedSessionInput) => {
 		try {
 			return await storeRecordedSessionFiles(payload);
@@ -814,7 +1570,10 @@ export function registerIpcHandlers(
 
 			const files = await fs.readdir(RECORDINGS_DIR);
 			const videoFiles = files.filter(
-				(file) => file.endsWith(".webm") && !file.endsWith("-webcam.webm"),
+				(file) =>
+					(file.endsWith(".webm") || file.endsWith(".mp4")) &&
+					!file.endsWith("-webcam.webm") &&
+					!file.endsWith("-webcam.mp4"),
 			);
 
 			if (videoFiles.length === 0) {
@@ -924,44 +1683,32 @@ export function registerIpcHandlers(
 			return { success: true, samples: [] };
 		}
 
-		const telemetryPath = `${targetVideoPath}.cursor.json`;
 		try {
-			const content = await fs.readFile(telemetryPath, "utf-8");
-			const parsed = JSON.parse(content);
-			const rawSamples = Array.isArray(parsed)
-				? parsed
-				: Array.isArray(parsed?.samples)
-					? parsed.samples
-					: [];
+			const parsed = JSON.parse(await fs.readFile(`${targetVideoPath}.cursor.json`, "utf-8"));
+			const recordingData = normalizeCursorRecordingData(parsed);
+			const samples: CursorTelemetryPoint[] = (recordingData?.samples ?? [])
+				.filter((point) => point.visible !== false)
+				.map((point) => ({
+					timeMs: point.timeMs,
+					cx: clamp(point.cx, 0, 1),
+					cy: clamp(point.cy, 0, 1),
+				}))
+				.sort((a, b) => a.timeMs - b.timeMs);
 
-			const samples: CursorTelemetryPoint[] = rawSamples
-				.filter((sample: unknown) => Boolean(sample && typeof sample === "object"))
-				.map((sample: unknown) => {
-					const point = sample as Partial<CursorTelemetryPoint>;
-					return {
-						timeMs:
-							typeof point.timeMs === "number" && Number.isFinite(point.timeMs)
-								? Math.max(0, point.timeMs)
-								: 0,
-						cx:
-							typeof point.cx === "number" && Number.isFinite(point.cx)
-								? clamp(point.cx, 0, 1)
-								: 0.5,
-						cy:
-							typeof point.cy === "number" && Number.isFinite(point.cy)
-								? clamp(point.cy, 0, 1)
-								: 0.5,
-					};
-				})
-				.sort((a: CursorTelemetryPoint, b: CursorTelemetryPoint) => a.timeMs - b.timeMs);
-
-			const rawClicks = Array.isArray(parsed?.clicks) ? parsed.clicks : [];
-			const clicks: number[] = rawClicks
-				.map((value: unknown) =>
-					typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null,
-				)
-				.filter((v: number | null): v is number => v !== null)
-				.sort((a: number, b: number) => a - b);
+			const legacyClicks = Array.isArray(parsed?.clicks) ? parsed.clicks : [];
+			const clicks: number[] =
+				legacyClicks.length > 0
+					? legacyClicks
+							.map((value: unknown) =>
+								typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null,
+							)
+							.filter((v: number | null): v is number => v !== null)
+							.sort((a: number, b: number) => a - b)
+					: (recordingData?.samples ?? [])
+							.filter((sample) => sample.visible !== false)
+							.filter((sample) => sample.interactionType === "click")
+							.map((sample) => sample.timeMs)
+							.sort((a, b) => a - b);
 
 			return { success: true, samples, clicks };
 		} catch (error) {
@@ -976,6 +1723,40 @@ export function registerIpcHandlers(
 				error: String(error),
 				samples: [],
 				clicks: [],
+			};
+		}
+	});
+
+	ipcMain.handle("get-cursor-recording-data", async (_, videoPath?: string) => {
+		const targetVideoPath = normalizeVideoSourcePath(
+			videoPath ?? currentRecordingSession?.screenVideoPath,
+		);
+		if (!targetVideoPath) {
+			return { success: true, data: null };
+		}
+
+		if (!isPathAllowed(targetVideoPath)) {
+			console.warn(
+				"[get-cursor-recording-data] Rejected path outside allowed directories:",
+				targetVideoPath,
+			);
+			return { success: true, data: null };
+		}
+
+		try {
+			const data = await readCursorRecordingData(targetVideoPath);
+			return { success: true, data };
+		} catch (error) {
+			const nodeError = error as NodeJS.ErrnoException;
+			if (nodeError.code === "ENOENT") {
+				return { success: true, data: null };
+			}
+			console.error("Failed to load cursor recording data:", error);
+			return {
+				success: false,
+				message: "Failed to load cursor recording data",
+				error: String(error),
+				data: null,
 			};
 		}
 	});

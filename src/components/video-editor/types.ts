@@ -172,6 +172,11 @@ export interface CursorTelemetryPoint {
 	cy: number;
 }
 
+export const DEFAULT_CURSOR_SIZE = 3.0;
+export const DEFAULT_CURSOR_SMOOTHING = 0.67;
+export const DEFAULT_CURSOR_MOTION_BLUR = 0.35;
+export const DEFAULT_CURSOR_CLICK_BOUNCE = 2.5;
+
 export interface TrimRegion {
 	id: string;
 	startMs: number;
