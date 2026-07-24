@@ -22,8 +22,11 @@
 		"addAnnotation": "Açıklama Ekle",
 		"addBlur": "Bulanik Ekle",
 		"addKeyframe": "Anahtar Kare Ekle",
+		"addCameraFullscreen": "Tam Ekran Kamera Ekle",
 		"deleteSelected": "Seçileni Sil",
-		"playPause": "Oynat / Duraklat"
+		"playPause": "Oynat / Duraklat",
+		"copySelected": "Seçileni Kopyala",
+		"paste": "Yapıştır"
 	},
 	"fixedActions": {
 		"undo": "Geri Al",

@@ -10,6 +10,7 @@ import {
 import { MotionBlurFilter } from "pixi-filters/motion-blur";
 import type {
 	AnnotationRegion,
+	CameraFullscreenRegion,
 	CropRegion,
 	Rotation3D,
 	SpeedRegion,
@@ -23,6 +24,7 @@ import {
 	isRotation3DIdentity,
 	lerpRotation3D,
 } from "@/components/video-editor/types";
+import { computeCameraFullscreenProgress } from "@/components/video-editor/videoPlayback/cameraFullscreenUtils";
 import {
 	AUTO_FOLLOW_PARAMS,
 	DEFAULT_FOCUS,
@@ -43,8 +45,10 @@ import {
 	type MotionBlurState,
 } from "@/components/video-editor/videoPlayback/zoomTransform";
 import {
+	computeCameraFullscreenTargetRect,
 	computeCompositeLayout,
 	getWebcamLayoutPresetDefinition,
+	lerpRect,
 	reactiveWebcamScale,
 	type Size,
 	type StyledRenderRect,
@@ -78,6 +82,7 @@ interface FrameRenderConfig {
 	height: number;
 	wallpaper: string;
 	zoomRegions: ZoomRegion[];
+	cameraFullscreenRegions?: CameraFullscreenRegion[];
 	showShadow: boolean;
 	shadowIntensity: number;
 	showBlur: boolean;
@@ -118,6 +123,7 @@ interface AnimationState {
 	x: number;
 	y: number;
 	appliedScale: number;
+	cameraFullscreenProgress: number;
 }
 
 interface LayoutCache {
@@ -126,6 +132,7 @@ interface LayoutCache {
 	baseScale: number;
 	baseOffset: { x: number; y: number };
 	maskRect: { x: number; y: number; width: number; height: number };
+	croppedRect: { x: number; y: number; width: number; height: number };
 	maskBorderRadius: number;
 	webcamRect: StyledRenderRect | null;
 }
@@ -176,6 +183,7 @@ export class FrameRenderer {
 			x: 0,
 			y: 0,
 			appliedScale: 1,
+			cameraFullscreenProgress: 0,
 		};
 	}
 
@@ -573,7 +581,7 @@ export class FrameRenderer {
 
 		const projectedPoint = projectNativeCursorToLocal({
 			cropRegion: this.config.cropRegion,
-			maskRect: this.layoutCache.maskRect,
+			maskRect: this.layoutCache.croppedRect,
 			sample: displaySample,
 		});
 		if (!projectedPoint) {
@@ -601,8 +609,10 @@ export class FrameRenderer {
 				getNativeCursorClickBounceProgress(this.config.cursorRecordingData, timeMs),
 			);
 		const appliedScale = this.animationState.appliedScale;
-		// Normalize cursor size to the same fraction of video width as the preview;
-		// both paths use maskRect.width / croppedVideoWidth.
+		// Normalize cursor size to croppedRect.width (the painted video width).
+		// The preview path still uses screenRect.width; they agree in cover mode but
+		// differ in fit-to-height letterbox — known asymmetry pending the preview-path
+		// follow-up to project the cursor onto the cropped sub-rect as well.
 		const sizeNorm =
 			this.layoutCache.videoSize.width > 0
 				? this.layoutCache.maskRect.width / this.layoutCache.videoSize.width
@@ -761,6 +771,12 @@ export class FrameRenderer {
 				y: compositeLayout.screenRect.y + coverOffsetY - cropPixelY,
 			},
 			maskRect: compositeLayout.screenRect,
+			croppedRect: {
+				x: compositeLayout.screenRect.x + coverOffsetX,
+				y: compositeLayout.screenRect.y + coverOffsetY,
+				width: croppedDisplayWidth,
+				height: croppedDisplayHeight,
+			},
 			maskBorderRadius: scaledBorderRadius,
 			webcamRect: compositeLayout.webcamRect,
 		};
@@ -768,6 +784,11 @@ export class FrameRenderer {
 
 	private updateAnimationState(timeMs: number): number {
 		if (!this.cameraContainer || !this.layoutCache) return 0;
+
+		this.animationState.cameraFullscreenProgress = computeCameraFullscreenProgress(
+			this.config.cameraFullscreenRegions ?? [],
+			timeMs,
+		);
 
 		const { region, strength, blendedScale, rotation3D, transition } = findDominantRegion(
 			this.config.zoomRegions,
@@ -1021,26 +1042,49 @@ export class FrameRenderer {
 		if (webcamFrame && webcamRect) {
 			const preset = getWebcamLayoutPresetDefinition(this.config.webcamLayoutPreset);
 			const shape = webcamRect.maskShape ?? this.config.webcamMaskShape ?? "rectangle";
-			// Scale the PiP webcam inversely with the eased zoom, anchoring the shrink to the
-			// docked corner (bottom-right by default) like the preview, so it stays flush to the
-			// edges instead of drifting toward center.
-			const reactiveFactor =
-				this.config.webcamReactiveZoom && this.config.webcamLayoutPreset === "picture-in-picture"
-					? reactiveWebcamScale(this.animationState.appliedScale)
-					: 1;
-			const camPos = this.config.webcamPosition;
-			const biasX = (camPos ? camPos.cx >= 0.5 : true) ? 1 : 0;
-			const biasY = (camPos ? camPos.cy >= 0.5 : true) ? 1 : 0;
-			const drawRect =
-				reactiveFactor < 1
-					? {
-							width: webcamRect.width * reactiveFactor,
-							height: webcamRect.height * reactiveFactor,
-							x: webcamRect.x + webcamRect.width * (1 - reactiveFactor) * biasX,
-							y: webcamRect.y + webcamRect.height * (1 - reactiveFactor) * biasY,
-							borderRadius: webcamRect.borderRadius * reactiveFactor,
-						}
-					: webcamRect;
+			const cameraFullProgress = this.animationState.cameraFullscreenProgress;
+			let drawRect: StyledRenderRect;
+			if (cameraFullProgress > 0) {
+				// Full Camera takes over the webcam's size/position entirely, growing it to cover
+				// the whole stage (inset by a margin, aspect-preserving — see
+				// computeCameraFullscreenTargetRect). Reactive zoom is ignored for this frame (see
+				// design notes 6.4): mixing "shrink for zoom" and "grow to full" in the same frame
+				// doesn't make sense.
+				const targetRect = computeCameraFullscreenTargetRect(
+					{ width: this.config.width, height: this.config.height },
+					webcamRect,
+				);
+				const fullRect: StyledRenderRect = {
+					x: targetRect.x,
+					y: targetRect.y,
+					width: targetRect.width,
+					height: targetRect.height,
+					borderRadius: 0,
+					maskShape: webcamRect.maskShape,
+				};
+				drawRect = lerpRect(webcamRect, fullRect, cameraFullProgress);
+			} else {
+				// Scale the PiP webcam inversely with the eased zoom, anchoring the shrink to the
+				// docked corner (bottom-right by default) like the preview, so it stays flush to the
+				// edges instead of drifting toward center.
+				const reactiveFactor =
+					this.config.webcamReactiveZoom && this.config.webcamLayoutPreset === "picture-in-picture"
+						? reactiveWebcamScale(this.animationState.appliedScale)
+						: 1;
+				const camPos = this.config.webcamPosition;
+				const biasX = (camPos ? camPos.cx >= 0.5 : true) ? 1 : 0;
+				const biasY = (camPos ? camPos.cy >= 0.5 : true) ? 1 : 0;
+				drawRect =
+					reactiveFactor < 1
+						? {
+								width: webcamRect.width * reactiveFactor,
+								height: webcamRect.height * reactiveFactor,
+								x: webcamRect.x + webcamRect.width * (1 - reactiveFactor) * biasX,
+								y: webcamRect.y + webcamRect.height * (1 - reactiveFactor) * biasY,
+								borderRadius: webcamRect.borderRadius * reactiveFactor,
+							}
+						: webcamRect;
+			}
 			const sourceWidth =
 				("displayWidth" in webcamFrame && webcamFrame.displayWidth > 0
 					? webcamFrame.displayWidth

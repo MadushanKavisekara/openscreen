@@ -26,6 +26,15 @@ struct AudioInputFormat {
     UINT32 avgBytesPerSec = 0;
 };
 
+struct MFEncoderOptions {
+    bool preferSoftwareEncoder = false;
+    bool injectDefaultSinkWriterFailureOnce = false;
+};
+
+constexpr const char* kVideoEncoderSelectionDefault = "default";
+constexpr const char* kVideoEncoderSelectionSoftwarePreferred = "software-preferred";
+constexpr const char* kVideoEncoderSelectionSoftwareFallback = "software-fallback";
+
 class MFEncoder {
 public:
     MFEncoder() = default;
@@ -42,11 +51,30 @@ public:
         int bitrate,
         ID3D11Device* device,
         ID3D11DeviceContext* context,
-        const AudioInputFormat* audioFormat = nullptr);
-    bool writeFrame(ID3D11Texture2D* texture, int64_t timestampHns, const BgraFrameView* webcamFrame = nullptr);
-    bool writeBgraFrame(const BgraFrameView& frame, int64_t timestampHns);
+        const AudioInputFormat* audioFormat = nullptr,
+        MFEncoderOptions options = {});
+    // Capturing a video/webcam sample (GPU readback + IMFSample creation) is
+    // split from submitting it to the sink writer (IMFSinkWriter::WriteSample)
+    // so callers that hold an external lock across the GPU-touching capture
+    // step (to serialize against a producer thread writing into the same
+    // texture) are not forced to also hold that lock across the potentially
+    // slow, blocking WriteSample call. See main.cpp's writeVideoFrames for why
+    // this split exists: holding the shared frame-state mutex across
+    // WriteSample let the software H.264 encoder path starve the main
+    // thread's stop-request check indefinitely (issue #115).
+    bool captureVideoSample(
+        ID3D11Texture2D* texture,
+        int64_t timestampHns,
+        const BgraFrameView* webcamFrame,
+        Microsoft::WRL::ComPtr<IMFSample>& outSample);
+    bool captureBgraSample(
+        const BgraFrameView& frame,
+        int64_t timestampHns,
+        Microsoft::WRL::ComPtr<IMFSample>& outSample);
+    bool submitVideoSample(IMFSample* sample);
     bool writeAudio(const BYTE* data, DWORD byteCount, int64_t timestampHns, int64_t durationHns);
     bool finalize();
+    const char* videoEncoderSelection() const;
 
 private:
     bool ensureStagingTexture(ID3D11Texture2D* texture);
@@ -72,4 +100,5 @@ private:
     int64_t firstTimestampHns_ = -1;
     int64_t lastTimestampHns_ = -1;
     bool finalized_ = false;
+    const char* videoEncoderSelection_ = kVideoEncoderSelectionDefault;
 };

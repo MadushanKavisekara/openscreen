@@ -51,11 +51,13 @@ import {
 	GIF_FRAME_RATES,
 	GIF_SIZE_PRESETS,
 } from "@/lib/exporter";
+import { buildGradientFromEditor } from "@/lib/gradientBuilder";
 import { cn } from "@/lib/utils";
 import { resolveImageWallpaperUrl, WALLPAPER_PATHS } from "@/lib/wallpaper";
 import { type AspectRatio, isPortraitAspectRatio } from "@/utils/aspectRatioUtils";
 import { getTestId } from "@/utils/getTestId";
 import ColorPicker from "../ui/color-picker";
+import GradientEditor from "../ui/gradient-editor";
 import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import { BlurSettingsPanel } from "./BlurSettingsPanel";
 import { BACKGROUND_IMAGE_ACCEPT, isSupportedBackgroundImageType } from "./backgroundImageUpload";
@@ -89,6 +91,8 @@ import type {
 import {
 	DEFAULT_WEBCAM_MIRRORED,
 	DEFAULT_WEBCAM_REACTIVE_ZOOM,
+	MAX_NATIVE_PLAYBACK_RATE,
+	MAX_PLAYBACK_SPEED,
 	MAX_ZOOM_SCALE,
 	MIN_ZOOM_SCALE,
 	ROTATION_3D_PRESET_ORDER,
@@ -746,7 +750,7 @@ export function SettingsPanel({
 				type="button"
 				onClick={() => {
 					window.electronAPI?.openExternalUrl(
-						"https://github.com/siddharthvaddem/openscreen/issues/new/choose",
+						"https://github.com/EtienneLescot/openscreen/issues/new/choose",
 					);
 				}}
 				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
@@ -767,7 +771,7 @@ export function SettingsPanel({
 			<button
 				type="button"
 				onClick={() => {
-					window.electronAPI?.openExternalUrl("https://github.com/siddharthvaddem/openscreen");
+					window.electronAPI?.openExternalUrl("https://github.com/EtienneLescot/openscreen");
 				}}
 				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
 			>
@@ -1214,7 +1218,9 @@ export function SettingsPanel({
 									<CustomSpeedInput
 										value={selectedSpeedValue ?? 1}
 										onChange={(val) => onSpeedChange?.(val)}
-										onError={() => toast.error(t("speed.maxSpeedError"))}
+										onError={() =>
+											toast.error(t("speed.maxSpeedError", { max: MAX_PLAYBACK_SPEED }))
+										}
 									/>
 								) : (
 									<div className="flex items-center gap-1 opacity-40">
@@ -1225,6 +1231,13 @@ export function SettingsPanel({
 									</div>
 								)}
 							</div>
+							{selectedSpeedId &&
+								selectedSpeedValue != null &&
+								selectedSpeedValue > MAX_NATIVE_PLAYBACK_RATE && (
+									<p className="px-1 text-[10px] leading-snug text-slate-500">
+										{t("speed.previewFrameSteppingHint", { native: MAX_NATIVE_PLAYBACK_RATE })}
+									</p>
+								)}
 							{selectedSpeedId && (
 								<Button
 									onClick={() => selectedSpeedId && onSpeedDelete?.(selectedSpeedId)}
@@ -1705,22 +1718,22 @@ export function SettingsPanel({
 									</AccordionTrigger>
 									<AccordionContent className="pb-3">
 										<Tabs defaultValue="image" className="w-full">
-											<TabsList className="mb-2 bg-white/5 border border-white/5 p-0.5 w-full grid grid-cols-3 h-7 rounded-lg">
+											<TabsList className="mb-2 grid h-7 w-full grid-cols-3 rounded-lg border border-white/5 bg-white/5 p-0.5">
 												<TabsTrigger
 													value="image"
-													className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 text-[10px] py-1 rounded-md transition-all"
+													className="h-full min-w-0 rounded-md px-1 py-0 text-[10px] leading-none text-slate-400 transition-colors data-[state=active]:bg-[#34B27B] data-[state=active]:text-white data-[state=active]:shadow-none"
 												>
 													{t("background.image")}
 												</TabsTrigger>
 												<TabsTrigger
 													value="color"
-													className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 text-[10px] py-1 rounded-md transition-all"
+													className="h-full min-w-0 rounded-md px-1 py-0 text-[10px] leading-none text-slate-400 transition-colors data-[state=active]:bg-[#34B27B] data-[state=active]:text-white data-[state=active]:shadow-none"
 												>
 													{t("background.color")}
 												</TabsTrigger>
 												<TabsTrigger
 													value="gradient"
-													className="data-[state=active]:bg-[#34B27B] data-[state=active]:text-white text-slate-400 text-[10px] py-1 rounded-md transition-all"
+													className="h-full min-w-0 rounded-md px-1 py-0 text-[10px] leading-none text-slate-400 transition-colors data-[state=active]:bg-[#34B27B] data-[state=active]:text-white data-[state=active]:shadow-none"
 												>
 													{t("background.gradient")}
 												</TabsTrigger>
@@ -1814,28 +1827,45 @@ export function SettingsPanel({
 													/>
 												</TabsContent>
 
-												<TabsContent value="gradient" className="mt-0">
-													<div className="grid grid-cols-6 gap-2">
-														{GRADIENTS.map((g, idx) => (
-															<div
-																key={g}
-																className={cn(
-																	"aspect-square w-8 h-8 rounded-lg border overflow-hidden cursor-pointer transition-all duration-150 shadow-sm",
-																	gradient === g
-																		? "border-[#34B27B] ring-1 ring-[#34B27B]/30"
-																		: "border-white/10 hover:border-[#34B27B]/40 opacity-80 hover:opacity-100 bg-white/5",
-																)}
-																style={{ background: g }}
-																aria-label={t("background.gradientLabel", {
-																	index: idx + 1,
-																})}
-																onClick={() => {
-																	setGradient(g);
-																	onWallpaperChange(g);
-																}}
-																role="button"
-															/>
-														))}
+												<TabsContent value="gradient" className="mt-0 space-y-3">
+													<div className="space-y-1">
+														<div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-1">
+															{t("background.presets")}
+														</div>
+														<div className="grid grid-cols-6 gap-2">
+															{GRADIENTS.map((g, idx) => (
+																<div
+																	key={g}
+																	className={cn(
+																		"aspect-square w-8 h-8 rounded-lg border overflow-hidden cursor-pointer transition-all duration-150 shadow-sm",
+																		gradient === g
+																			? "border-[#34B27B] ring-1 ring-[#34B27B]/30"
+																			: "border-white/10 hover:border-[#34B27B]/40 opacity-80 hover:opacity-100 bg-white/5",
+																	)}
+																	style={{ background: g }}
+																	aria-label={t("background.gradientLabel", {
+																		index: idx + 1,
+																	})}
+																	onClick={() => {
+																		setGradient(g);
+																		onWallpaperChange(g);
+																	}}
+																	role="button"
+																/>
+															))}
+														</div>
+													</div>
+													<div className="space-y-1">
+														<div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 px-1">
+															{t("background.custom")}
+														</div>
+														<GradientEditor
+															onChange={(state) => {
+																const css = buildGradientFromEditor(state);
+																setGradient(css);
+																onWallpaperChange(css);
+															}}
+														/>
 													</div>
 												</TabsContent>
 											</div>

@@ -22,8 +22,11 @@
 		"addAnnotation": "Добавить аннотацию",
 		"addBlur": "Добавить размытие",
 		"addKeyframe": "Добавить ключевой кадр",
+		"addCameraFullscreen": "Добавить камеру на весь экран",
 		"deleteSelected": "Удалить выбранное",
-		"playPause": "Воспроизведение / Пауза"
+		"playPause": "Воспроизведение / Пауза",
+		"copySelected": "Копировать выбранное",
+		"paste": "Вставить"
 	},
 	"fixedActions": {
 		"undo": "Отменить",

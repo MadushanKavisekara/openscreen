@@ -214,6 +214,19 @@ export interface TrimRegion {
 	endMs: number;
 }
 
+/**
+ * "Full Camera" / "Cut to camera" timeline region. During this span, the webcam overlay
+ * animates its size/position until it covers the entire canvas, visually hiding the
+ * desktop behind it (the desktop keeps recording underneath, it's just covered).
+ * No focus/depth/rotation needed: unlike ZoomRegion, the destination is always "fill the
+ * canvas", so the shape stays intentionally simpler.
+ */
+export interface CameraFullscreenRegion {
+	id: string;
+	startMs: number;
+	endMs: number;
+}
+
 export type AnnotationType = "text" | "image" | "figure" | "blur";
 
 export type ArrowDirection =
@@ -324,6 +337,37 @@ export const DEFAULT_ANNOTATION_STYLE: AnnotationTextStyle = {
 	textAnimation: "none",
 };
 
+/**
+ * A freshly created text annotation starts with no content: the properties panel's
+ * textarea has a real `placeholder` attribute for the empty-state hint, so the
+ * actual value must be empty for it to show and for typing to replace rather than
+ * append to baked-in text (see #127).
+ */
+export function createTextAnnotationRegion(params: {
+	id: string;
+	startMs: number;
+	endMs: number;
+	zIndex: number;
+}): AnnotationRegion {
+	return {
+		id: params.id,
+		startMs: params.startMs,
+		endMs: params.endMs,
+		type: "text",
+		content: "",
+		position: { ...DEFAULT_ANNOTATION_POSITION },
+		size: { ...DEFAULT_ANNOTATION_SIZE },
+		style: { ...DEFAULT_ANNOTATION_STYLE },
+		zIndex: params.zIndex,
+	};
+}
+
+/** Resolves the content for a region whose type is being switched to "text" -- same
+ * empty-by-default rule as a freshly created one when no prior text was stored. */
+export function resolveTextAnnotationContent(existingTextContent?: string): string {
+	return existingTextContent || "";
+}
+
 export const DEFAULT_FIGURE_DATA: FigureData = {
 	arrowDirection: "right",
 	color: "#34B27B",
@@ -368,8 +412,11 @@ export const DEFAULT_CROP_REGION: CropRegion = {
 export type PlaybackSpeed = number;
 
 export const MIN_PLAYBACK_SPEED = 0.1;
-// Above 16x the decoder can't keep up and the playhead stalls during preview.
-export const MAX_PLAYBACK_SPEED = 16;
+export const MAX_PLAYBACK_SPEED = 100;
+// Chromium hard-caps HTMLMediaElement.playbackRate at 16 (setting more throws
+// NotSupportedError). At or below this, preview plays natively; above it, preview
+// frame-steps by seeking and audio export uses an offline pitch-preserved stretch.
+export const MAX_NATIVE_PLAYBACK_RATE = 16;
 
 export function clampPlaybackSpeed(speed: number): PlaybackSpeed {
 	return Math.round(Math.min(MAX_PLAYBACK_SPEED, Math.max(MIN_PLAYBACK_SPEED, speed)) * 100) / 100;

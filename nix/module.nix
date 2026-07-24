@@ -1,7 +1,7 @@
 # NixOS module for OpenScreen
 # Usage in flake-based NixOS config:
 #
-#   inputs.openscreen.url = "github:siddharthvaddem/openscreen";
+#   inputs.openscreen.url = "github:EtienneLescot/openscreen";
 #
 #   { inputs, ... }: {
 #     imports = [ inputs.openscreen.nixosModules.default ];

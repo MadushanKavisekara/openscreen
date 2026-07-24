@@ -5,6 +5,7 @@ import {
 	Check,
 	ChevronDown,
 	Gauge,
+	Maximize,
 	MessageSquare,
 	Plus,
 	ScanEye,
@@ -25,12 +26,19 @@ import {
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { useAudioPeaks } from "@/hooks/useAudioPeaks";
-import { matchesShortcut } from "@/lib/shortcuts";
+import { isTextEditingTarget, matchesShortcut } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, type AspectRatio, getAspectRatioLabel } from "@/utils/aspectRatioUtils";
 import { formatShortcut } from "@/utils/platformUtils";
 import { BLUR_REGIONS_ENABLED } from "../featureFlags";
-import type { AnnotationRegion, SpeedRegion, TrimRegion, ZoomRegion } from "../types";
+import { findFreeGapAt } from "../regionPlacement";
+import type {
+	AnnotationRegion,
+	CameraFullscreenRegion,
+	SpeedRegion,
+	TrimRegion,
+	ZoomRegion,
+} from "../types";
 import BackgroundWaveform from "./BackgroundWaveform";
 import Item from "./Item";
 import KeyframeMarkers from "./KeyframeMarkers";
@@ -38,6 +46,7 @@ import Row from "./Row";
 import TimelineWrapper from "./TimelineWrapper";
 
 const ZOOM_ROW_ID = "row-zoom";
+const CAMERA_ROW_ID = "row-camera-fullscreen";
 const TRIM_ROW_ID = "row-trim";
 const ANNOTATION_ROW_ID = "row-annotation";
 const BLUR_ROW_ID = "row-blur";
@@ -49,6 +58,12 @@ interface TimelineEditorProps {
 	videoDuration: number;
 	hasVideoSource?: boolean;
 	currentTime: number;
+	/**
+	 * Reads the live playhead position (ms) directly, bypassing `currentTime` React
+	 * state. The playhead subscribes to this via its own rAF loop so it stays in sync
+	 * with actual playback regardless of how long an ancestor's re-render takes.
+	 */
+	getPlaybackTimeMs?: () => number;
 	onSeek?: (time: number) => void;
 	zoomRegions: ZoomRegion[];
 	onZoomAdded: (span: Span) => void;
@@ -62,6 +77,12 @@ interface TimelineEditorProps {
 	onZoomDelete: (id: string) => void;
 	selectedZoomId: string | null;
 	onSelectZoom: (id: string | null) => void;
+	cameraFullscreenRegions?: CameraFullscreenRegion[];
+	onCameraFullscreenAdded?: (span: Span) => void;
+	onCameraFullscreenSpanChange?: (id: string, span: Span) => void;
+	onCameraFullscreenDelete?: (id: string) => void;
+	selectedCameraFullscreenId?: string | null;
+	onSelectCameraFullscreen?: (id: string | null) => void;
 	trimRegions?: TrimRegion[];
 	onTrimAdded?: (span: Span) => void;
 	onTrimSpanChange?: (id: string, span: Span) => void;
@@ -112,7 +133,7 @@ interface TimelineRenderItem {
 	zoomCustomScale?: number;
 	speedValue?: number;
 	isAutoFocus?: boolean;
-	variant: "zoom" | "trim" | "annotation" | "speed" | "blur";
+	variant: "zoom" | "camera-fullscreen" | "trim" | "annotation" | "speed" | "blur";
 }
 
 const SCALE_CANDIDATES = [
@@ -269,6 +290,7 @@ function shouldStartTimelineScrub(target: EventTarget | null, timelineElement: H
 function PlaybackCursor({
 	currentTimeMs,
 	videoDurationMs,
+	getPlaybackTimeMs,
 	onSeek,
 	onRangeChange,
 	timelineRef,
@@ -276,6 +298,7 @@ function PlaybackCursor({
 }: {
 	currentTimeMs: number;
 	videoDurationMs: number;
+	getPlaybackTimeMs?: () => number;
 	onSeek?: (time: number) => void;
 	onRangeChange?: (updater: (previous: Range) => Range) => void;
 	timelineRef: React.RefObject<HTMLDivElement>;
@@ -285,6 +308,38 @@ function PlaybackCursor({
 	const sideProperty = direction === "rtl" ? "right" : "left";
 	const [isDragging, setIsDragging] = useState(false);
 	const [dragPreviewTimeMs, setDragPreviewTimeMs] = useState<number | null>(null);
+
+	// Drives the playhead position from the video element every animation frame,
+	// isolated from the rest of the tree: this component's own `useState` call only
+	// re-renders this small subtree, not TimelineEditor/VideoEditor above it. That
+	// decoupling is what keeps the playhead glued to actual playback even while an
+	// ancestor's (much heavier) re-render is in flight — see issue #111.
+	const [liveTimeMs, setLiveTimeMs] = useState(currentTimeMs);
+	const getPlaybackTimeMsRef = useRef(getPlaybackTimeMs);
+	useEffect(() => {
+		getPlaybackTimeMsRef.current = getPlaybackTimeMs;
+	}, [getPlaybackTimeMs]);
+
+	useEffect(() => {
+		if (!getPlaybackTimeMsRef.current) {
+			return;
+		}
+
+		let rafId: number;
+		const tick = () => {
+			const getter = getPlaybackTimeMsRef.current;
+			if (getter) {
+				const latest = getter();
+				setLiveTimeMs((previous) => (previous === latest ? previous : latest));
+			}
+			rafId = requestAnimationFrame(tick);
+		};
+		rafId = requestAnimationFrame(tick);
+
+		return () => cancelAnimationFrame(rafId);
+	}, []);
+
+	const resolvedTimeMs = getPlaybackTimeMs ? liveTimeMs : currentTimeMs;
 
 	useEffect(() => {
 		if (!isDragging) return;
@@ -384,7 +439,7 @@ function PlaybackCursor({
 	]);
 
 	const displayTimeMs =
-		isDragging && dragPreviewTimeMs !== null ? dragPreviewTimeMs : currentTimeMs;
+		isDragging && dragPreviewTimeMs !== null ? dragPreviewTimeMs : resolvedTimeMs;
 
 	if (videoDurationMs <= 0 || displayTimeMs < 0) {
 		return null;
@@ -413,7 +468,7 @@ function PlaybackCursor({
 				}}
 				onMouseDown={(e) => {
 					e.stopPropagation(); // Prevent timeline click
-					setDragPreviewTimeMs(currentTimeMs);
+					setDragPreviewTimeMs(resolvedTimeMs);
 					setIsDragging(true);
 				}}
 			>
@@ -556,14 +611,17 @@ function Timeline({
 	items,
 	videoDurationMs,
 	currentTimeMs,
+	getPlaybackTimeMs,
 	onSeek,
 	onRangeChange,
 	onSelectZoom,
+	onSelectCameraFullscreen,
 	onSelectTrim,
 	onSelectAnnotation,
 	onSelectBlur,
 	onSelectSpeed,
 	selectedZoomId,
+	selectedCameraFullscreenId,
 	selectedTrimId,
 	selectedAnnotationId,
 	selectedBlurId,
@@ -575,14 +633,17 @@ function Timeline({
 	items: TimelineRenderItem[];
 	videoDurationMs: number;
 	currentTimeMs: number;
+	getPlaybackTimeMs?: () => number;
 	onSeek?: (time: number) => void;
 	onRangeChange?: (updater: (previous: Range) => Range) => void;
 	onSelectZoom?: (id: string | null) => void;
+	onSelectCameraFullscreen?: (id: string | null) => void;
 	onSelectTrim?: (id: string | null) => void;
 	onSelectAnnotation?: (id: string | null) => void;
 	onSelectBlur?: (id: string | null) => void;
 	onSelectSpeed?: (id: string | null) => void;
 	selectedZoomId: string | null;
+	selectedCameraFullscreenId?: string | null;
 	selectedTrimId?: string | null;
 	selectedAnnotationId?: string | null;
 	selectedBlurId?: string | null;
@@ -626,11 +687,19 @@ function Timeline({
 
 	const clearTimelineSelection = useCallback(() => {
 		onSelectZoom?.(null);
+		onSelectCameraFullscreen?.(null);
 		onSelectTrim?.(null);
 		onSelectAnnotation?.(null);
 		onSelectBlur?.(null);
 		onSelectSpeed?.(null);
-	}, [onSelectZoom, onSelectTrim, onSelectAnnotation, onSelectBlur, onSelectSpeed]);
+	}, [
+		onSelectZoom,
+		onSelectCameraFullscreen,
+		onSelectTrim,
+		onSelectAnnotation,
+		onSelectBlur,
+		onSelectSpeed,
+	]);
 
 	const handleTimelineClick = useCallback(
 		(e: React.MouseEvent<HTMLDivElement>) => {
@@ -745,6 +814,7 @@ function Timeline({
 	);
 
 	const zoomItems = items.filter((item) => item.rowId === ZOOM_ROW_ID);
+	const cameraFullscreenItems = items.filter((item) => item.rowId === CAMERA_ROW_ID);
 	const trimItems = items.filter((item) => item.rowId === TRIM_ROW_ID);
 	const annotationItems = items.filter((item) => item.rowId === ANNOTATION_ROW_ID);
 	const blurItems = items.filter((item) => item.rowId === BLUR_ROW_ID);
@@ -769,6 +839,7 @@ function Timeline({
 			<PlaybackCursor
 				currentTimeMs={currentTimeMs}
 				videoDurationMs={videoDurationMs}
+				getPlaybackTimeMs={getPlaybackTimeMs}
 				onSeek={onSeek}
 				onRangeChange={onRangeChange}
 				timelineRef={localTimelineRef}
@@ -788,6 +859,26 @@ function Timeline({
 						zoomCustomScale={item.zoomCustomScale}
 						isAutoFocus={item.isAutoFocus}
 						variant="zoom"
+					>
+						{item.label}
+					</Item>
+				))}
+			</Row>
+
+			<Row
+				id={CAMERA_ROW_ID}
+				isEmpty={cameraFullscreenItems.length === 0}
+				hint={t("hints.pressCameraFullscreen")}
+			>
+				{cameraFullscreenItems.map((item) => (
+					<Item
+						id={item.id}
+						key={item.id}
+						rowId={item.rowId}
+						span={item.span}
+						isSelected={item.id === selectedCameraFullscreenId}
+						onSelect={() => onSelectCameraFullscreen?.(item.id)}
+						variant="camera-fullscreen"
 					>
 						{item.label}
 					</Item>
@@ -886,6 +977,7 @@ export default function TimelineEditor({
 	videoDuration,
 	hasVideoSource = false,
 	currentTime,
+	getPlaybackTimeMs,
 	onSeek,
 	zoomRegions,
 	onZoomAdded,
@@ -897,6 +989,12 @@ export default function TimelineEditor({
 	onZoomDelete,
 	selectedZoomId,
 	onSelectZoom,
+	cameraFullscreenRegions = [],
+	onCameraFullscreenAdded,
+	onCameraFullscreenSpanChange,
+	onCameraFullscreenDelete,
+	selectedCameraFullscreenId,
+	onSelectCameraFullscreen,
 	trimRegions = [],
 	onTrimAdded,
 	onTrimSpanChange,
@@ -987,6 +1085,14 @@ export default function TimelineEditor({
 		onSelectZoom(null);
 	}, [selectedZoomId, onZoomDelete, onSelectZoom]);
 
+	const deleteSelectedCameraFullscreen = useCallback(() => {
+		if (!selectedCameraFullscreenId || !onCameraFullscreenDelete || !onSelectCameraFullscreen) {
+			return;
+		}
+		onCameraFullscreenDelete(selectedCameraFullscreenId);
+		onSelectCameraFullscreen(null);
+	}, [selectedCameraFullscreenId, onCameraFullscreenDelete, onSelectCameraFullscreen]);
+
 	const deleteSelectedTrim = useCallback(() => {
 		if (!selectedTrimId || !onTrimDelete || !onSelectTrim) return;
 		onTrimDelete(selectedTrimId);
@@ -1018,11 +1124,17 @@ export default function TimelineEditor({
 	// Normalize regions only when timeline bounds change. Reading via refs avoids a
 	// dependency loop that would re-fire on every drag and race dnd-timeline's state.
 	const zoomRegionsRef = useRef(zoomRegions);
+	const cameraFullscreenRegionsRef = useRef(cameraFullscreenRegions);
 	const trimRegionsRef = useRef(trimRegions);
 	const speedRegionsRef = useRef(speedRegions);
-	zoomRegionsRef.current = zoomRegions;
-	trimRegionsRef.current = trimRegions;
-	speedRegionsRef.current = speedRegions;
+	// Sync refs in an effect (not during render) so render stays pure; defined before
+	// the normalization effect below so that effect reads the freshest region values.
+	useEffect(() => {
+		zoomRegionsRef.current = zoomRegions;
+		cameraFullscreenRegionsRef.current = cameraFullscreenRegions;
+		trimRegionsRef.current = trimRegions;
+		speedRegionsRef.current = speedRegions;
+	}, [zoomRegions, cameraFullscreenRegions, trimRegions, speedRegions]);
 
 	useEffect(() => {
 		if (totalMs === 0 || safeMinDurationMs <= 0) {
@@ -1038,6 +1150,18 @@ export default function TimelineEditor({
 
 			if (normalizedStart !== region.startMs || normalizedEnd !== region.endMs) {
 				onZoomSpanChange(region.id, { start: normalizedStart, end: normalizedEnd });
+			}
+		});
+
+		cameraFullscreenRegionsRef.current.forEach((region) => {
+			const clampedStart = Math.max(0, Math.min(region.startMs, totalMs));
+			const minEnd = clampedStart + safeMinDurationMs;
+			const clampedEnd = Math.min(totalMs, Math.max(minEnd, region.endMs));
+			const normalizedStart = Math.max(0, Math.min(clampedStart, totalMs - safeMinDurationMs));
+			const normalizedEnd = Math.max(minEnd, Math.min(clampedEnd, totalMs));
+
+			if (normalizedStart !== region.startMs || normalizedEnd !== region.endMs) {
+				onCameraFullscreenSpanChange?.(region.id, { start: normalizedStart, end: normalizedEnd });
 			}
 		});
 
@@ -1064,11 +1188,19 @@ export default function TimelineEditor({
 				onSpeedSpanChange?.(region.id, { start: normalizedStart, end: normalizedEnd });
 			}
 		});
-	}, [totalMs, safeMinDurationMs, onZoomSpanChange, onTrimSpanChange, onSpeedSpanChange]);
+	}, [
+		totalMs,
+		safeMinDurationMs,
+		onZoomSpanChange,
+		onCameraFullscreenSpanChange,
+		onTrimSpanChange,
+		onSpeedSpanChange,
+	]);
 
 	const hasOverlap = useCallback(
 		(newSpan: Span, excludeId?: string): boolean => {
 			const isZoomItem = zoomRegions.some((r) => r.id === excludeId);
+			const isCameraFullscreenItem = cameraFullscreenRegions.some((r) => r.id === excludeId);
 			const isTrimItem = trimRegions.some((r) => r.id === excludeId);
 			const isAnnotationItem = annotationRegions.some((r) => r.id === excludeId);
 			const isBlurItem = blurRegions.some((r) => r.id === excludeId);
@@ -1078,7 +1210,9 @@ export default function TimelineEditor({
 				return false;
 			}
 
-			const checkOverlap = (regions: (ZoomRegion | TrimRegion | SpeedRegion)[]) => {
+			const checkOverlap = (
+				regions: (ZoomRegion | CameraFullscreenRegion | TrimRegion | SpeedRegion)[],
+			) => {
 				return regions.some((region) => {
 					if (region.id === excludeId) return false;
 					// True intersection, adjacency is allowed
@@ -1088,6 +1222,10 @@ export default function TimelineEditor({
 
 			if (isZoomItem) {
 				return checkOverlap(zoomRegions);
+			}
+
+			if (isCameraFullscreenItem) {
+				return checkOverlap(cameraFullscreenRegions);
 			}
 
 			if (isTrimItem) {
@@ -1100,7 +1238,14 @@ export default function TimelineEditor({
 
 			return false;
 		},
-		[zoomRegions, trimRegions, annotationRegions, blurRegions, speedRegions],
+		[
+			zoomRegions,
+			cameraFullscreenRegions,
+			trimRegions,
+			annotationRegions,
+			blurRegions,
+			speedRegions,
+		],
 	);
 
 	// 5% of the timeline or 1000ms, whichever is larger, so it's wide enough to grab.
@@ -1120,23 +1265,48 @@ export default function TimelineEditor({
 		}
 
 		const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
-		const sorted = [...zoomRegions].sort((a, b) => a.startMs - b.startMs);
-		const nextRegion = sorted.find((region) => region.startMs > startPos);
-		const gapToNext = nextRegion ? nextRegion.startMs - startPos : totalMs - startPos;
-
-		const isOverlapping = sorted.some(
-			(region) => startPos >= region.startMs && startPos < region.endMs,
-		);
-		if (isOverlapping || gapToNext <= 0) {
+		const { ok, gapMs } = findFreeGapAt(zoomRegions, startPos, totalMs);
+		if (!ok) {
 			toast.error(t("errors.cannotPlaceZoom"), {
 				description: t("errors.zoomExistsAtLocation"),
 			});
 			return;
 		}
 
-		const actualDuration = Math.min(defaultRegionDurationMs, gapToNext);
+		const actualDuration = Math.min(defaultRegionDurationMs, gapMs);
 		onZoomAdded({ start: startPos, end: startPos + actualDuration });
 	}, [videoDuration, totalMs, currentTimeMs, zoomRegions, onZoomAdded, defaultRegionDurationMs, t]);
+
+	const handleAddCameraFullscreen = useCallback(() => {
+		if (!videoDuration || videoDuration === 0 || totalMs === 0 || !onCameraFullscreenAdded) {
+			return;
+		}
+
+		const defaultDuration = Math.min(defaultRegionDurationMs, totalMs);
+		if (defaultDuration <= 0) {
+			return;
+		}
+
+		const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
+		const { ok, gapMs } = findFreeGapAt(cameraFullscreenRegions, startPos, totalMs);
+		if (!ok) {
+			toast.error(t("errors.cannotPlaceCameraFullscreen"), {
+				description: t("errors.cameraFullscreenExistsAtLocation"),
+			});
+			return;
+		}
+
+		const actualDuration = Math.min(defaultRegionDurationMs, gapMs);
+		onCameraFullscreenAdded({ start: startPos, end: startPos + actualDuration });
+	}, [
+		videoDuration,
+		totalMs,
+		currentTimeMs,
+		cameraFullscreenRegions,
+		onCameraFullscreenAdded,
+		defaultRegionDurationMs,
+		t,
+	]);
 
 	const handleAddTrim = useCallback(() => {
 		if (!videoDuration || videoDuration === 0 || totalMs === 0 || !onTrimAdded) {
@@ -1149,21 +1319,15 @@ export default function TimelineEditor({
 		}
 
 		const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
-		const sorted = [...trimRegions].sort((a, b) => a.startMs - b.startMs);
-		const nextRegion = sorted.find((region) => region.startMs > startPos);
-		const gapToNext = nextRegion ? nextRegion.startMs - startPos : totalMs - startPos;
-
-		const isOverlapping = sorted.some(
-			(region) => startPos >= region.startMs && startPos < region.endMs,
-		);
-		if (isOverlapping || gapToNext <= 0) {
+		const { ok, gapMs } = findFreeGapAt(trimRegions, startPos, totalMs);
+		if (!ok) {
 			toast.error(t("errors.cannotPlaceTrim"), {
 				description: t("errors.trimExistsAtLocation"),
 			});
 			return;
 		}
 
-		const actualDuration = Math.min(defaultRegionDurationMs, gapToNext);
+		const actualDuration = Math.min(defaultRegionDurationMs, gapMs);
 		onTrimAdded({ start: startPos, end: startPos + actualDuration });
 	}, [videoDuration, totalMs, currentTimeMs, trimRegions, onTrimAdded, defaultRegionDurationMs, t]);
 
@@ -1178,21 +1342,15 @@ export default function TimelineEditor({
 		}
 
 		const startPos = Math.max(0, Math.min(currentTimeMs, totalMs));
-		const sorted = [...speedRegions].sort((a, b) => a.startMs - b.startMs);
-		const nextRegion = sorted.find((region) => region.startMs > startPos);
-		const gapToNext = nextRegion ? nextRegion.startMs - startPos : totalMs - startPos;
-
-		const isOverlapping = sorted.some(
-			(region) => startPos >= region.startMs && startPos < region.endMs,
-		);
-		if (isOverlapping || gapToNext <= 0) {
+		const { ok, gapMs } = findFreeGapAt(speedRegions, startPos, totalMs);
+		if (!ok) {
 			toast.error(t("errors.cannotPlaceSpeed"), {
 				description: t("errors.speedExistsAtLocation"),
 			});
 			return;
 		}
 
-		const actualDuration = Math.min(defaultRegionDurationMs, gapToNext);
+		const actualDuration = Math.min(defaultRegionDurationMs, gapMs);
 		onSpeedAdded({ start: startPos, end: startPos + actualDuration });
 	}, [
 		videoDuration,
@@ -1238,7 +1396,7 @@ export default function TimelineEditor({
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+			if (isTextEditingTarget(e.target)) {
 				return;
 			}
 
@@ -1259,6 +1417,9 @@ export default function TimelineEditor({
 			}
 			if (matchesShortcut(e, keyShortcuts.addSpeed, isMac)) {
 				handleAddSpeed();
+			}
+			if (matchesShortcut(e, keyShortcuts.addCameraFullscreen, isMac)) {
+				handleAddCameraFullscreen();
 			}
 
 			// Tab cycles through overlapping annotations at the current time
@@ -1292,6 +1453,8 @@ export default function TimelineEditor({
 					deleteSelectedKeyframe();
 				} else if (selectedZoomId) {
 					deleteSelectedZoom();
+				} else if (selectedCameraFullscreenId) {
+					deleteSelectedCameraFullscreen();
 				} else if (selectedTrimId) {
 					deleteSelectedTrim();
 				} else if (selectedAnnotationId) {
@@ -1312,14 +1475,17 @@ export default function TimelineEditor({
 		handleAddAnnotation,
 		handleAddBlur,
 		handleAddSpeed,
+		handleAddCameraFullscreen,
 		deleteSelectedKeyframe,
 		deleteSelectedZoom,
+		deleteSelectedCameraFullscreen,
 		deleteSelectedTrim,
 		deleteSelectedAnnotation,
 		deleteSelectedBlur,
 		deleteSelectedSpeed,
 		selectedKeyframeId,
 		selectedZoomId,
+		selectedCameraFullscreenId,
 		selectedTrimId,
 		selectedAnnotationId,
 		selectedBlurId,
@@ -1353,6 +1519,16 @@ export default function TimelineEditor({
 			isAutoFocus: region.focusMode === "auto",
 			variant: "zoom",
 		}));
+
+		const cameraFullscreens: TimelineRenderItem[] = cameraFullscreenRegions.map(
+			(region, index) => ({
+				id: region.id,
+				rowId: CAMERA_ROW_ID,
+				span: { start: region.startMs, end: region.endMs },
+				label: t("labels.cameraFullscreenItem", { index: String(index + 1) }),
+				variant: "camera-fullscreen",
+			}),
+		);
 
 		const trims: TimelineRenderItem[] = trimRegions.map((region, index) => ({
 			id: region.id,
@@ -1400,17 +1576,30 @@ export default function TimelineEditor({
 			variant: "speed",
 		}));
 
-		return [...zooms, ...trims, ...annotations, ...blurs, ...speeds];
-	}, [zoomRegions, trimRegions, annotationRegions, blurRegions, speedRegions, t]);
+		return [...zooms, ...cameraFullscreens, ...trims, ...annotations, ...blurs, ...speeds];
+	}, [
+		zoomRegions,
+		cameraFullscreenRegions,
+		trimRegions,
+		annotationRegions,
+		blurRegions,
+		speedRegions,
+		t,
+	]);
 
 	// Spans that participate in overlap resolution (clampToNeighbours). Annotation
 	// and blur are excluded since they may overlap and shouldn't constrain a drag.
 	const allRegionSpans = useMemo(() => {
 		const zooms = zoomRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
+		const cameraFullscreens = cameraFullscreenRegions.map((r) => ({
+			id: r.id,
+			start: r.startMs,
+			end: r.endMs,
+		}));
 		const trims = trimRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
 		const speeds = speedRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
-		return [...zooms, ...trims, ...speeds];
-	}, [zoomRegions, trimRegions, speedRegions]);
+		return [...zooms, ...cameraFullscreens, ...trims, ...speeds];
+	}, [zoomRegions, cameraFullscreenRegions, trimRegions, speedRegions]);
 
 	// Snap targets whose edges pull during a snap but don't push anyone away.
 	const softSnapSpans = useMemo(() => {
@@ -1429,6 +1618,8 @@ export default function TimelineEditor({
 		(id: string, span: Span) => {
 			if (zoomRegions.some((r) => r.id === id)) {
 				onZoomSpanChange(id, span);
+			} else if (cameraFullscreenRegions.some((r) => r.id === id)) {
+				onCameraFullscreenSpanChange?.(id, span);
 			} else if (trimRegions.some((r) => r.id === id)) {
 				onTrimSpanChange?.(id, span);
 			} else if (speedRegions.some((r) => r.id === id)) {
@@ -1441,11 +1632,13 @@ export default function TimelineEditor({
 		},
 		[
 			zoomRegions,
+			cameraFullscreenRegions,
 			trimRegions,
 			speedRegions,
 			annotationRegions,
 			blurRegions,
 			onZoomSpanChange,
+			onCameraFullscreenSpanChange,
 			onTrimSpanChange,
 			onSpeedSpanChange,
 			onAnnotationSpanChange,
@@ -1485,6 +1678,15 @@ export default function TimelineEditor({
 						title={t("buttons.addZoom")}
 					>
 						<ZoomIn className="w-4 h-4" />
+					</Button>
+					<Button
+						onClick={handleAddCameraFullscreen}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#38bdf8] hover:bg-[#38bdf8]/10 transition-all"
+						title={t("buttons.addCameraFullscreen")}
+					>
+						<Maximize className="w-4 h-4" />
 					</Button>
 					<Button
 						onClick={() => onToggleAutoZoom?.(!autoZoomEnabled)}
@@ -1645,14 +1847,17 @@ export default function TimelineEditor({
 						items={timelineItems}
 						videoDurationMs={totalMs}
 						currentTimeMs={currentTimeMs}
+						getPlaybackTimeMs={getPlaybackTimeMs}
 						onSeek={onSeek}
 						onRangeChange={setRange}
 						onSelectZoom={onSelectZoom}
+						onSelectCameraFullscreen={onSelectCameraFullscreen}
 						onSelectTrim={onSelectTrim}
 						onSelectAnnotation={onSelectAnnotation}
 						onSelectBlur={onSelectBlur}
 						onSelectSpeed={onSelectSpeed}
 						selectedZoomId={selectedZoomId}
+						selectedCameraFullscreenId={selectedCameraFullscreenId}
 						selectedTrimId={selectedTrimId}
 						selectedAnnotationId={selectedAnnotationId}
 						selectedBlurId={selectedBlurId}

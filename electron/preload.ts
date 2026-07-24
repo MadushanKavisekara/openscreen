@@ -47,11 +47,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openSourceSelector: () => {
 		return ipcRenderer.invoke("open-source-selector");
 	},
+	openNotes: () => {
+		return ipcRenderer.invoke("open-notes");
+	},
 	selectSource: (source: ProcessedDesktopSource) => {
 		return ipcRenderer.invoke("select-source", source);
 	},
 	getSelectedSource: () => {
 		return ipcRenderer.invoke("get-selected-source");
+	},
+	onSelectedSourceChanged: (callback: (source: ProcessedDesktopSource) => void) => {
+		const listener = (_event: unknown, source: ProcessedDesktopSource) => callback(source);
+		ipcRenderer.on("selected-source-changed", listener);
+		return () => ipcRenderer.removeListener("selected-source-changed", listener);
+	},
+	onSourceSelectorClosed: (callback: () => void) => {
+		const listener = () => callback();
+		ipcRenderer.on("source-selector-closed", listener);
+		return () => ipcRenderer.removeListener("source-selector-closed", listener);
 	},
 	requestCameraAccess: () => {
 		return ipcRenderer.invoke("request-camera-access");
@@ -164,6 +177,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);
 	},
+	getReadableFileInfo: (filePath: string) => {
+		return ipcRenderer.invoke("get-readable-file-info", filePath);
+	},
+	readFileChunk: (filePath: string, offset: number, length: number) => {
+		return ipcRenderer.invoke("read-file-chunk", filePath, offset, length);
+	},
 	preparePreviewAudioTrack: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-audio-track", filePath);
 	},
@@ -213,6 +232,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const listener = () => callback();
 		ipcRenderer.on("menu-save-project-as", listener);
 		return () => ipcRenderer.removeListener("menu-save-project-as", listener);
+	},
+	quitApp: () => {
+		ipcRenderer.send("app-quit");
 	},
 	getPlatform: () => {
 		return ipcRenderer.invoke("get-platform");

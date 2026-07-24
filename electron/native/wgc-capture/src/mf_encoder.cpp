@@ -22,6 +22,251 @@ bool succeeded(HRESULT hr, const char* label) {
     return false;
 }
 
+// Count how many Media Foundation Transforms are registered for a given
+// (category, output subtype) pair. Caller does not need the activations
+// themselves; we just want to know whether at least one is registered so we
+// can diagnose "no encoder registered" vs "encoder registered but sink can't
+// wire it".
+//
+// `mediaType` is the encoder's major media type (e.g. video for video
+// encoders, audio for audio encoders). It is used as both the input and
+// output major type because an encoder's input and output streams share the
+// same major type by definition. `outputSubtype` is the encoder's output
+// media subtype (e.g. H264 for video encoders, AAC for audio encoders). We do
+// not constrain the input subtype because encoders typically accept many
+// input subtypes and constraining here would under-count.
+UINT32 countRegisteredMfts(
+    const GUID& category,
+    const GUID& mediaType,
+    const GUID& outputSubtype) {
+    MFT_REGISTER_TYPE_INFO inputType{};
+    inputType.guidMajorType = mediaType;
+    inputType.guidSubtype = GUID_NULL;
+
+    MFT_REGISTER_TYPE_INFO outputType{};
+    outputType.guidMajorType = mediaType;
+    outputType.guidSubtype = outputSubtype;
+
+    // MFT_ENUM_FLAG_ALL is the documented flag set for "synchronous, async,
+    // hardware, software" — there is no separate SOFTWARE flag. Using a
+    // narrower flag set can omit legitimate encoders (e.g. the AMD AMF H.264
+    // encoder is async hardware).
+    IMFActivate** activates = nullptr;
+    UINT32 count = 0;
+    HRESULT hr = MFTEnumEx(
+        category,
+        MFT_ENUM_FLAG_ALL,
+        &inputType,
+        &outputType,
+        &activates,
+        &count);
+    if (FAILED(hr)) {
+        // MFTEnumEx failed outright (e.g. COM not initialized, invalid
+        // category). Surface the HRESULT so future bug reports can
+        // distinguish this from "zero encoders registered" (which returns
+        // SUCCEEDED(hr) with count == 0).
+        std::cerr << "ERROR: MFTEnumEx failed (hr=0x" << std::hex << hr
+                  << std::dec << ")" << std::endl;
+        return 0;
+    }
+    if (activates != nullptr) {
+        for (UINT32 i = 0; i < count; i += 1) {
+            if (activates[i] != nullptr) {
+                activates[i]->Release();
+            }
+        }
+        CoTaskMemFree(activates);
+    }
+    return count;
+}
+
+UINT32 countRegisteredH264VideoEncoders() {
+    return countRegisteredMfts(
+        MFT_CATEGORY_VIDEO_ENCODER, MFMediaType_Video, MFVideoFormat_H264);
+}
+
+UINT32 countRegisteredAacAudioEncoders() {
+    return countRegisteredMfts(
+        MFT_CATEGORY_AUDIO_ENCODER, MFMediaType_Audio, MFAudioFormat_AAC);
+}
+
+void logMissingH264EncoderError() {
+    std::cerr
+        << "ERROR: No H.264 video encoder MFT is registered on this system."
+        << std::endl;
+    std::cerr
+        << "  Windows could not find any Media Foundation Transform that "
+        << "outputs MFVideoFormat_H264." << std::endl;
+    std::cerr
+        << "  MP4 recording requires an H.264 encoder. Without one, "
+        << "MFCreateSinkWriterFromURL fails (hr=0x80070003)."
+        << std::endl;
+    std::cerr
+        << "  Try the following fixes in order:" << std::endl;
+    std::cerr
+        << "    1. Install the Media Feature Pack via Optional Features "
+        << "(Settings > Apps > Optional features > Add > Media Feature Pack), "
+        << "or run: Dism /online /add-capability /capabilityname:Media.MediaFeaturePack~~~~0.0.1.0"
+        << std::endl;
+    std::cerr
+        << "    2. Update your GPU drivers so the hardware H.264 encoder MFT "
+        << "(AMD AMF, NVIDIA NVENC, Intel Quick Sync) re-registers itself."
+        << std::endl;
+    std::cerr
+        << "    3. Inspect the registered transforms under"
+        << " HKLM:\\SOFTWARE\\Microsoft\\Windows Media Foundation\\Transforms"
+        << " and HKLM:\\SOFTWARE\\Classes\\MediaFoundation\\Transforms."
+        << std::endl;
+    std::cerr
+        << "    4. Reboot after driver or Media Feature Pack changes; "
+        << "MFT registration is cached at boot."
+        << std::endl;
+}
+
+// Which step of createSinkWriterFromUrl produced a failing HRESULT. Only a
+// CreateSinkWriter failure means MFCreateSinkWriterFromURL itself failed and
+// warrants the encoder-enumeration diagnostics in logSinkWriterCreateFailure.
+// The earlier software-path setup steps each log their own specific error, so
+// routing them through the sink-writer diagnostics would misattribute the
+// failure (e.g. reporting a local MFT registration failure as a sink-writer
+// failure on the VM / headless / broken-driver systems this path targets).
+enum class SinkWriterCreateStage {
+    SoftwareEncoderRegistration,
+    CreateAttributes,
+    DisableHardwareTransforms,
+    CreateSinkWriter,
+};
+
+HRESULT ensureSoftwareH264EncoderRegisteredForProcess() {
+    static std::mutex registrationMutex;
+    static bool attempted = false;
+    static HRESULT result = E_FAIL;
+
+    std::scoped_lock lock(registrationMutex);
+    if (attempted) {
+        return result;
+    }
+    attempted = true;
+
+    MFT_REGISTER_TYPE_INFO inputType{};
+    inputType.guidMajorType = MFMediaType_Video;
+    inputType.guidSubtype = GUID_NULL;
+
+    MFT_REGISTER_TYPE_INFO outputType{};
+    outputType.guidMajorType = MFMediaType_Video;
+    outputType.guidSubtype = MFVideoFormat_H264;
+
+    result = MFTRegisterLocalByCLSID(
+        CLSID_MSH264EncoderMFT,
+        MFT_CATEGORY_VIDEO_ENCODER,
+        L"Microsoft H.264 Encoder MFT (software)",
+        MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG_ASYNCMFT,
+        1,
+        &inputType,
+        1,
+        &outputType);
+    if (FAILED(result)) {
+        std::cerr << "ERROR: MFTRegisterLocalByCLSID(CLSID_MSH264EncoderMFT) failed (hr=0x"
+                  << std::hex << result << std::dec << ")" << std::endl;
+    } else {
+        std::cerr
+            << "INFO: Registered the Microsoft software H.264 MFT locally for this helper process."
+            << std::endl;
+    }
+    return result;
+}
+
+HRESULT createSinkWriterFromUrl(
+    const std::wstring& outputPath,
+    bool forceSoftwareEncoder,
+    bool injectDefaultSinkWriterFailureOnce,
+    bool& injectedDefaultSinkWriterFailure,
+    Microsoft::WRL::ComPtr<IMFSinkWriter>& sinkWriter,
+    SinkWriterCreateStage& failedStage) {
+    // Default to the sink-writer creation step; the software-path steps below
+    // overwrite this only when one of them returns early with a failure.
+    failedStage = SinkWriterCreateStage::CreateSinkWriter;
+
+    Microsoft::WRL::ComPtr<IMFAttributes> attributes;
+    if (forceSoftwareEncoder) {
+        // The software fallback works by registering the Microsoft software
+        // H.264 encoder MFT *in this helper process* via MFTRegisterLocalByCLSID
+        // (see ensureSoftwareH264EncoderRegisteredForProcess). That in-process
+        // registration is the key mechanism: it makes a software H.264 encoder
+        // available even when the machine's registered hardware encoders are
+        // missing or broken. Clearing MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS is
+        // only a secondary guard so the sink writer prefers the locally
+        // registered software encoder over a hardware transform; it is not
+        // itself the fallback mechanism.
+        const HRESULT registerHr = ensureSoftwareH264EncoderRegisteredForProcess();
+        if (FAILED(registerHr)) {
+            failedStage = SinkWriterCreateStage::SoftwareEncoderRegistration;
+            return registerHr;
+        }
+
+        HRESULT hr = MFCreateAttributes(&attributes, 1);
+        if (FAILED(hr)) {
+            std::cerr << "ERROR: MFCreateAttributes(sink writer) failed (hr=0x"
+                      << std::hex << hr << std::dec << ")" << std::endl;
+            failedStage = SinkWriterCreateStage::CreateAttributes;
+            return hr;
+        }
+        hr = attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, FALSE);
+        if (FAILED(hr)) {
+            std::cerr << "ERROR: Set MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS failed (hr=0x"
+                      << std::hex << hr << std::dec << ")" << std::endl;
+            failedStage = SinkWriterCreateStage::DisableHardwareTransforms;
+            return hr;
+        }
+    }
+
+    failedStage = SinkWriterCreateStage::CreateSinkWriter;
+    if (
+        !forceSoftwareEncoder &&
+        injectDefaultSinkWriterFailureOnce &&
+        !injectedDefaultSinkWriterFailure) {
+        injectedDefaultSinkWriterFailure = true;
+        std::cerr
+            << "TEST-ONLY: Injected default MFCreateSinkWriterFromURL failure "
+            << "(hr=0x80070003); injection consumed exactly once."
+            << std::endl;
+        return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    }
+
+    const HRESULT sinkWriterHr = MFCreateSinkWriterFromURL(
+        outputPath.c_str(), nullptr, attributes.Get(), &sinkWriter);
+    if (SUCCEEDED(sinkWriterHr) && forceSoftwareEncoder) {
+        std::cerr << "INFO: Created the real software H.264 sink writer successfully."
+                  << std::endl;
+    }
+    return sinkWriterHr;
+}
+
+void logSinkWriterCreateFailure(HRESULT sinkWriterHr, const AudioInputFormat* audioFormat) {
+    const UINT32 h264EncoderCount = countRegisteredH264VideoEncoders();
+    const UINT32 aacEncoderCount = (audioFormat != nullptr)
+        ? countRegisteredAacAudioEncoders()
+        : 0;
+    std::cerr << "ERROR: MFCreateSinkWriterFromURL failed (hr=0x"
+              << std::hex << sinkWriterHr << std::dec << ")" << std::endl;
+    std::cerr << "  Registered H.264 video encoder MFTs: " << h264EncoderCount
+              << std::endl;
+    if (audioFormat != nullptr) {
+        std::cerr << "  Registered AAC audio encoder MFTs: " << aacEncoderCount
+                  << std::endl;
+    }
+    if (h264EncoderCount == 0) {
+        logMissingH264EncoderError();
+    } else {
+        std::cerr
+            << "  An H.264 encoder MFT is registered but the sink writer "
+            << "still failed. Possible causes: invalid output path or "
+            << "permissions, no MP4 mux configured, or GPU driver "
+            << "incompatibility with this Media Foundation build."
+            << std::endl;
+    }
+}
+
 void setFrameSize(IMFMediaType* type, UINT32 width, UINT32 height) {
     MFSetAttributeSize(type, MF_MT_FRAME_SIZE, width, height);
 }
@@ -83,6 +328,10 @@ MFEncoder::~MFEncoder() {
     finalize();
 }
 
+const char* MFEncoder::videoEncoderSelection() const {
+    return videoEncoderSelection_;
+}
+
 bool MFEncoder::initialize(
     const std::wstring& outputPath,
     int width,
@@ -91,12 +340,14 @@ bool MFEncoder::initialize(
     int bitrate,
     ID3D11Device* device,
     ID3D11DeviceContext* context,
-    const AudioInputFormat* audioFormat) {
+    const AudioInputFormat* audioFormat,
+    MFEncoderOptions options) {
     width_ = (std::max(2, width) / 2) * 2;
     height_ = (std::max(2, height) / 2) * 2;
     fps_ = std::max(1, fps);
     device_ = device;
     context_ = context;
+    videoEncoderSelection_ = kVideoEncoderSelectionDefault;
 
     if (!succeeded(MFStartup(MF_VERSION), "MFStartup")) {
         return false;
@@ -114,18 +365,6 @@ bool MFEncoder::initialize(
     setFrameRate(outputType.Get(), static_cast<UINT32>(fps_));
     setPixelAspectRatio(outputType.Get());
 
-    if (!succeeded(MFCreateSinkWriterFromURL(outputPath.c_str(), nullptr, nullptr, &sinkWriter_),
-                   "MFCreateSinkWriterFromURL")) {
-        return false;
-    }
-    if (!succeeded(sinkWriter_->AddStream(outputType.Get(), &videoStreamIndex_), "AddStream")) {
-        return false;
-    }
-
-    if (audioFormat && !configureAudioStream(*audioFormat)) {
-        return false;
-    }
-
     Microsoft::WRL::ComPtr<IMFMediaType> inputType;
     if (!succeeded(MFCreateMediaType(&inputType), "MFCreateMediaType(input)")) {
         return false;
@@ -138,15 +377,86 @@ bool MFEncoder::initialize(
     setFrameRate(inputType.Get(), static_cast<UINT32>(fps_));
     setPixelAspectRatio(inputType.Get());
 
-    if (!succeeded(sinkWriter_->SetInputMediaType(videoStreamIndex_, inputType.Get(), nullptr),
-                   "SetInputMediaType")) {
-        return false;
-    }
-    if (!succeeded(sinkWriter_->BeginWriting(), "BeginWriting")) {
-        return false;
+    bool injectedDefaultSinkWriterFailure = false;
+
+    auto resetSinkWriterAttempt = [&]() {
+        sinkWriter_.Reset();
+        videoStreamIndex_ = 0;
+        audioStreamIndex_ = 0;
+        hasAudioStream_ = false;
+        videoEncoderSelection_ = kVideoEncoderSelectionDefault;
+    };
+
+    auto configureSinkWriterAttempt = [&, audioFormat](
+        bool forceSoftwareEncoder,
+        const char* selection,
+        bool logCreateFailure) {
+        resetSinkWriterAttempt();
+
+        SinkWriterCreateStage failedStage = SinkWriterCreateStage::CreateSinkWriter;
+        const HRESULT sinkWriterHr = createSinkWriterFromUrl(
+            outputPath,
+            forceSoftwareEncoder,
+            options.injectDefaultSinkWriterFailureOnce,
+            injectedDefaultSinkWriterFailure,
+            sinkWriter_,
+            failedStage);
+        if (FAILED(sinkWriterHr)) {
+            // Only a genuine MFCreateSinkWriterFromURL failure gets the
+            // sink-writer / encoder-enumeration diagnostics. The earlier
+            // software-path steps (local MFT registration, attribute creation,
+            // hardware-transform flag) already logged their own specific error
+            // inside createSinkWriterFromUrl, so logging here as well would
+            // misattribute those failures to MFCreateSinkWriterFromURL.
+            if (failedStage == SinkWriterCreateStage::CreateSinkWriter) {
+                if (logCreateFailure) {
+                    logSinkWriterCreateFailure(sinkWriterHr, audioFormat);
+                } else {
+                    std::cerr << "WARNING: Default MFCreateSinkWriterFromURL failed (hr=0x"
+                              << std::hex << sinkWriterHr << std::dec << ")" << std::endl;
+                }
+            }
+            return false;
+        }
+        if (!succeeded(sinkWriter_->AddStream(outputType.Get(), &videoStreamIndex_), "AddStream")) {
+            return false;
+        }
+
+        if (audioFormat && !configureAudioStream(*audioFormat)) {
+            return false;
+        }
+
+        if (!succeeded(sinkWriter_->SetInputMediaType(videoStreamIndex_, inputType.Get(), nullptr),
+                       "SetInputMediaType")) {
+            return false;
+        }
+        if (!succeeded(sinkWriter_->BeginWriting(), "BeginWriting")) {
+            return false;
+        }
+
+        videoEncoderSelection_ = selection;
+        return true;
+    };
+
+    if (options.preferSoftwareEncoder) {
+        return configureSinkWriterAttempt(
+            true,
+            kVideoEncoderSelectionSoftwarePreferred,
+            true);
     }
 
-    return true;
+    if (configureSinkWriterAttempt(false, kVideoEncoderSelectionDefault, false)) {
+        return true;
+    }
+
+    std::cerr
+        << "WARNING: Default Media Foundation H.264 encoder setup failed; "
+        << "retrying with the Microsoft software H.264 encoder."
+        << std::endl;
+    return configureSinkWriterAttempt(
+        true,
+        kVideoEncoderSelectionSoftwareFallback,
+        true);
 }
 
 bool MFEncoder::configureAudioStream(const AudioInputFormat& audioFormat) {
@@ -293,23 +603,38 @@ bool MFEncoder::copyBgraFrameToBuffer(const BgraFrameView& frame, BYTE* destinat
     return true;
 }
 
-bool MFEncoder::writeFrame(ID3D11Texture2D* texture, int64_t timestampHns, const BgraFrameView* webcamFrame) {
-    std::scoped_lock writerLock(writerMutex_);
-    if (!sinkWriter_ || finalized_) {
-        return false;
-    }
+bool MFEncoder::captureVideoSample(
+    ID3D11Texture2D* texture,
+    int64_t timestampHns,
+    const BgraFrameView* webcamFrame,
+    Microsoft::WRL::ComPtr<IMFSample>& outSample) {
+    outSample.Reset();
 
-    if (firstTimestampHns_ < 0) {
-        firstTimestampHns_ = timestampHns;
-    }
-
-    int64_t sampleTime = timestampHns - firstTimestampHns_;
-    if (sampleTime <= lastTimestampHns_) {
-        sampleTime = lastTimestampHns_ + (10'000'000LL / fps_);
-    }
     const int64_t sampleDuration = 10'000'000LL / fps_;
-    lastTimestampHns_ = sampleTime;
+    int64_t sampleTime = 0;
+    {
+        std::scoped_lock writerLock(writerMutex_);
+        if (!sinkWriter_ || finalized_) {
+            return false;
+        }
 
+        if (firstTimestampHns_ < 0) {
+            firstTimestampHns_ = timestampHns;
+        }
+
+        sampleTime = timestampHns - firstTimestampHns_;
+        if (sampleTime <= lastTimestampHns_) {
+            sampleTime = lastTimestampHns_ + sampleDuration;
+        }
+        lastTimestampHns_ = sampleTime;
+    }
+
+    // The GPU readback below (copyFrameToBuffer -> CopyResource/Map on
+    // `texture`) is not internally synchronized here. Callers must hold their
+    // own lock around this call that also serializes against whatever thread
+    // writes new frame data into `texture` (see main.cpp's writeVideoFrames,
+    // which holds the shared frame-state mutex across this call but not
+    // across submitVideoSample).
     Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer;
     const DWORD frameBytes = static_cast<DWORD>(width_ * height_ * 4);
     if (!succeeded(MFCreateMemoryBuffer(frameBytes, &buffer), "MFCreateMemoryBuffer")) {
@@ -338,25 +663,34 @@ bool MFEncoder::writeFrame(ID3D11Texture2D* texture, int64_t timestampHns, const
     sample->SetSampleTime(sampleTime);
     sample->SetSampleDuration(sampleDuration);
 
-    return succeeded(sinkWriter_->WriteSample(videoStreamIndex_, sample.Get()), "WriteSample");
+    outSample = sample;
+    return true;
 }
 
-bool MFEncoder::writeBgraFrame(const BgraFrameView& frame, int64_t timestampHns) {
-    std::scoped_lock writerLock(writerMutex_);
-    if (!sinkWriter_ || finalized_) {
-        return false;
-    }
+bool MFEncoder::captureBgraSample(
+    const BgraFrameView& frame,
+    int64_t timestampHns,
+    Microsoft::WRL::ComPtr<IMFSample>& outSample) {
+    outSample.Reset();
 
-    if (firstTimestampHns_ < 0) {
-        firstTimestampHns_ = timestampHns;
-    }
-
-    int64_t sampleTime = timestampHns - firstTimestampHns_;
-    if (sampleTime <= lastTimestampHns_) {
-        sampleTime = lastTimestampHns_ + (10'000'000LL / fps_);
-    }
     const int64_t sampleDuration = 10'000'000LL / fps_;
-    lastTimestampHns_ = sampleTime;
+    int64_t sampleTime = 0;
+    {
+        std::scoped_lock writerLock(writerMutex_);
+        if (!sinkWriter_ || finalized_) {
+            return false;
+        }
+
+        if (firstTimestampHns_ < 0) {
+            firstTimestampHns_ = timestampHns;
+        }
+
+        sampleTime = timestampHns - firstTimestampHns_;
+        if (sampleTime <= lastTimestampHns_) {
+            sampleTime = lastTimestampHns_ + sampleDuration;
+        }
+        lastTimestampHns_ = sampleTime;
+    }
 
     Microsoft::WRL::ComPtr<IMFMediaBuffer> buffer;
     const DWORD frameBytes = static_cast<DWORD>(width_ * height_ * 4);
@@ -386,7 +720,25 @@ bool MFEncoder::writeBgraFrame(const BgraFrameView& frame, int64_t timestampHns)
     sample->SetSampleTime(sampleTime);
     sample->SetSampleDuration(sampleDuration);
 
-    return succeeded(sinkWriter_->WriteSample(videoStreamIndex_, sample.Get()), "WriteSample(webcam)");
+    outSample = sample;
+    return true;
+}
+
+bool MFEncoder::submitVideoSample(IMFSample* sample) {
+    if (!sample) {
+        return false;
+    }
+
+    // This is the potentially slow, blocking step (especially with the
+    // software H.264 encoder fallback): IMFSinkWriter::WriteSample runs the
+    // encode synchronously on the calling thread. Callers must NOT hold any
+    // lock shared with a thread that needs to make timely progress (e.g. a
+    // stop-request check) across this call.
+    std::scoped_lock writerLock(writerMutex_);
+    if (!sinkWriter_ || finalized_) {
+        return false;
+    }
+    return succeeded(sinkWriter_->WriteSample(videoStreamIndex_, sample), "WriteSample");
 }
 
 bool MFEncoder::writeAudio(const BYTE* data, DWORD byteCount, int64_t timestampHns, int64_t durationHns) {

@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { FolderOpen, Languages, Save, Video } from "lucide-react";
+import { ChevronDown, FolderOpen, Languages, Save, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -51,7 +51,7 @@ import {
 } from "@/lib/exporter";
 import { computeFrameStepTime } from "@/lib/frameStep";
 import type { CursorCaptureMode, ProjectMedia } from "@/lib/recordingSession";
-import { matchesShortcut } from "@/lib/shortcuts";
+import { isTextEditingTarget, matchesShortcut } from "@/lib/shortcuts";
 import {
 	getExportFolder,
 	getProjectFolder,
@@ -68,6 +68,7 @@ import {
 	isPortraitAspectRatio,
 } from "@/utils/aspectRatioUtils";
 import { EditorEmptyState } from "./EditorEmptyState";
+import { EditorMenuBar } from "./EditorMenuBar";
 import { ExportDialog } from "./ExportDialog";
 import {
 	DEFAULT_CURSOR_SETTINGS,
@@ -87,13 +88,28 @@ import {
 	toFileUrl,
 	validateProjectData,
 } from "./projectPersistence";
+import {
+	buildPastedAnnotation,
+	buildSpeedRegion,
+	buildZoomRegion,
+	type CopiedRegion,
+	extractAnnotationAttributes,
+	extractSpeedAttributes,
+	extractZoomAttributes,
+	getCopiedRegion,
+	replaceAnnotationAttributes,
+	setCopiedRegion,
+} from "./regionClipboard";
+import { findFreeGapAt } from "./regionPlacement";
 import { SettingsPanel } from "./SettingsPanel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
 	type AnnotationRegion,
 	type BlurData,
+	type CameraFullscreenRegion,
 	clampFocusToDepth,
+	createTextAnnotationRegion,
 	DEFAULT_ANNOTATION_POSITION,
 	DEFAULT_ANNOTATION_SIZE,
 	DEFAULT_ANNOTATION_STYLE,
@@ -104,6 +120,7 @@ import {
 	type FigureData,
 	type PlaybackSpeed,
 	type Rotation3DPreset,
+	resolveTextAnnotationContent,
 	type SpeedRegion,
 	type TrimRegion,
 	ZOOM_DEPTH_SCALES,
@@ -185,10 +202,13 @@ export default function VideoEditor() {
 		undo,
 		redo,
 		resetState,
+		canUndo,
+		canRedo,
 	} = useEditorHistory(INITIAL_EDITOR_STATE);
 
 	const {
 		zoomRegions,
+		cameraFullscreenRegions,
 		autoZoomEnabled,
 		autoFocusAll,
 		trimRegions,
@@ -227,6 +247,7 @@ export default function VideoEditor() {
 	const durationRef = useRef(duration);
 	durationRef.current = duration;
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
+	const [selectedCameraFullscreenId, setSelectedCameraFullscreenId] = useState<string | null>(null);
 	const [isPreviewingZoom, setIsPreviewingZoom] = useState(false);
 	const [selectedTrimId, setSelectedTrimId] = useState<string | null>(null);
 	const [selectedSpeedId, setSelectedSpeedId] = useState<string | null>(null);
@@ -297,6 +318,7 @@ export default function VideoEditor() {
 	const videoPlaybackRef = useRef<VideoPlaybackRef>(null);
 
 	const nextZoomIdRef = useRef(1);
+	const nextCameraFullscreenIdRef = useRef(1);
 	const nextTrimIdRef = useRef(1);
 	const nextSpeedIdRef = useRef(1);
 
@@ -313,6 +335,7 @@ export default function VideoEditor() {
 	const { locale, setLocale, t: rawT } = useI18n();
 	const t = useScopedT("editor");
 	const ts = useScopedT("settings");
+	const tt = useScopedT("timeline");
 	const availableLocales = getAvailableLocales();
 
 	const nextAnnotationIdRef = useRef(1);
@@ -372,6 +395,7 @@ export default function VideoEditor() {
 			const inferredDurationMs = Math.max(
 				0,
 				...normalizedEditor.zoomRegions.map((region) => region.endMs),
+				...normalizedEditor.cameraFullscreenRegions.map((region) => region.endMs),
 				...normalizedEditor.trimRegions.map((region) => region.endMs),
 				...normalizedEditor.speedRegions.map((region) => region.endMs),
 				...normalizedEditor.annotationRegions.map((region) => region.endMs),
@@ -384,6 +408,8 @@ export default function VideoEditor() {
 			}
 			setIsPlaying(false);
 			setCurrentTime(0);
+			// This inferred duration is only a placeholder until the video element's real
+			// metadata resolves (see VideoPlayback's syncResolvedDuration).
 			setDuration(inferredDurationMs > 0 ? inferredDurationMs / 1000 : 0);
 
 			setError(null);
@@ -393,6 +419,13 @@ export default function VideoEditor() {
 			setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
 			setRecordingCursorCaptureMode(projectCursorCaptureMode);
 			setCurrentProjectPath(path ?? null);
+			// Reset the memoized last-resolved-duration guard so resolution isn't skipped
+			// just because the real duration happens to match a value already seen from
+			// before this load (e.g. reloading a project referencing the same video file,
+			// whose src may not change and so never re-fires `loadedmetadata`). Must run
+			// after the setDuration placeholder above, or its correction gets clobbered by
+			// the same-tick placeholder assignment winning the state-batch race.
+			videoPlaybackRef.current?.resetDurationResolution();
 
 			// A loaded project keeps its zooms exactly as saved, so never auto-suggest
 			// over it (even if it has zero zooms because the user deleted them all).
@@ -408,6 +441,7 @@ export default function VideoEditor() {
 				padding: normalizedEditor.padding,
 				cropRegion: normalizedEditor.cropRegion,
 				zoomRegions: normalizedEditor.zoomRegions,
+				cameraFullscreenRegions: normalizedEditor.cameraFullscreenRegions,
 				autoZoomEnabled: normalizedEditor.autoZoomEnabled,
 				autoFocusAll: normalizedEditor.autoFocusAll,
 				trimRegions: normalizedEditor.trimRegions,
@@ -429,6 +463,7 @@ export default function VideoEditor() {
 			setCursorTheme(normalizedEditor.cursorTheme);
 
 			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
@@ -437,6 +472,10 @@ export default function VideoEditor() {
 			nextZoomIdRef.current = deriveNextId(
 				"zoom",
 				normalizedEditor.zoomRegions.map((region) => region.id),
+			);
+			nextCameraFullscreenIdRef.current = deriveNextId(
+				"camera-fullscreen",
+				normalizedEditor.cameraFullscreenRegions.map((region) => region.id),
 			);
 			nextTrimIdRef.current = deriveNextId(
 				"trim",
@@ -485,6 +524,7 @@ export default function VideoEditor() {
 			padding,
 			cropRegion,
 			zoomRegions,
+			cameraFullscreenRegions,
 			autoZoomEnabled,
 			autoFocusAll,
 			trimRegions,
@@ -516,6 +556,7 @@ export default function VideoEditor() {
 		padding,
 		cropRegion,
 		zoomRegions,
+		cameraFullscreenRegions,
 		autoZoomEnabled,
 		autoFocusAll,
 		trimRegions,
@@ -644,6 +685,7 @@ export default function VideoEditor() {
 				padding,
 				cropRegion,
 				zoomRegions,
+				cameraFullscreenRegions,
 				autoZoomEnabled,
 				autoFocusAll,
 				trimRegions,
@@ -709,6 +751,7 @@ export default function VideoEditor() {
 			padding,
 			cropRegion,
 			zoomRegions,
+			cameraFullscreenRegions,
 			autoZoomEnabled,
 			autoFocusAll,
 			trimRegions,
@@ -846,6 +889,7 @@ export default function VideoEditor() {
 		resetState();
 		// Reset non-undoable selection state.
 		setSelectedZoomId(null);
+		setSelectedCameraFullscreenId(null);
 		setSelectedTrimId(null);
 		setSelectedSpeedId(null);
 		setSelectedAnnotationId(null);
@@ -863,6 +907,7 @@ export default function VideoEditor() {
 		setCursorTheme(DEFAULT_CURSOR_SETTINGS.theme);
 		// Reset region ID counters.
 		nextZoomIdRef.current = 1;
+		nextCameraFullscreenIdRef.current = 1;
 		nextTrimIdRef.current = 1;
 		nextSpeedIdRef.current = 1;
 		nextAnnotationIdRef.current = 1;
@@ -970,9 +1015,31 @@ export default function VideoEditor() {
 		video.currentTime = time;
 	}
 
+	// Reads the live playhead position directly off the <video> element, bypassing
+	// `currentTime` React state entirely. The timeline's playhead subscribes to this
+	// via its own rAF loop so it stays in lockstep with actual playback regardless of
+	// how long this (large) component's own re-render takes — see issue #111.
+	const getPlaybackTimeMs = useCallback(() => {
+		const video = videoPlaybackRef.current?.video;
+		if (video) return video.currentTime * 1000;
+		return currentTimeRef.current * 1000;
+	}, []);
+
 	const handleSelectZoom = useCallback((id: string | null) => {
 		setSelectedZoomId(id);
 		if (id) {
+			setSelectedCameraFullscreenId(null);
+			setSelectedTrimId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+		}
+	}, []);
+
+	const handleSelectCameraFullscreen = useCallback((id: string | null) => {
+		setSelectedCameraFullscreenId(id);
+		if (id) {
+			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
@@ -984,6 +1051,7 @@ export default function VideoEditor() {
 		setSelectedTrimId(id);
 		if (id) {
 			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
 			setSelectedBlurId(null);
@@ -994,6 +1062,7 @@ export default function VideoEditor() {
 		setSelectedAnnotationId(id);
 		if (id) {
 			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedBlurId(null);
@@ -1004,6 +1073,7 @@ export default function VideoEditor() {
 		setSelectedBlurId(id);
 		if (id) {
 			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
 			setSelectedTrimId(null);
 			setSelectedAnnotationId(null);
 			setSelectedSpeedId(null);
@@ -1026,6 +1096,7 @@ export default function VideoEditor() {
 			};
 			pushState((prev) => ({ zoomRegions: [...prev.zoomRegions, newRegion] }));
 			setSelectedZoomId(id);
+			setSelectedCameraFullscreenId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
@@ -1034,8 +1105,63 @@ export default function VideoEditor() {
 		[pushState, autoFocusAll],
 	);
 
+	const handleCameraFullscreenAdded = useCallback(
+		(span: Span) => {
+			const id = `camera-fullscreen-${nextCameraFullscreenIdRef.current++}`;
+			const newRegion: CameraFullscreenRegion = {
+				id,
+				startMs: Math.round(span.start),
+				endMs: Math.round(span.end),
+			};
+			pushState((prev) => ({
+				cameraFullscreenRegions: [...prev.cameraFullscreenRegions, newRegion],
+			}));
+			setSelectedCameraFullscreenId(id);
+			setSelectedZoomId(null);
+			setSelectedTrimId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+		},
+		[pushState],
+	);
+
+	const handleCameraFullscreenSpanChange = useCallback(
+		(id: string, span: Span) => {
+			pushState((prev) => ({
+				cameraFullscreenRegions: prev.cameraFullscreenRegions.map((region) =>
+					region.id === id
+						? {
+								...region,
+								startMs: Math.round(span.start),
+								endMs: Math.round(span.end),
+							}
+						: region,
+				),
+			}));
+		},
+		[pushState],
+	);
+
+	const handleCameraFullscreenDelete = useCallback(
+		(id: string) => {
+			pushState((prev) => ({
+				cameraFullscreenRegions: prev.cameraFullscreenRegions.filter((r) => r.id !== id),
+			}));
+			if (selectedCameraFullscreenId === id) {
+				setSelectedCameraFullscreenId(null);
+			}
+		},
+		[selectedCameraFullscreenId, pushState],
+	);
+
 	// Builds fresh "auto" zoom regions from cursor telemetry without overlapping
 	// existing ones. Used by both the on-load auto-suggest pass and the wand toggle.
+	// These regions always follow the cursor for their whole span (focusMode "auto") —
+	// that's the entire point of an auto-placed zoom: it should pan to track the cursor
+	// as it moves, not freeze at the dwell point that triggered the suggestion. This is
+	// independent of the global "Auto Focus All" toggle, which only affects the default
+	// for manually-drawn zoom regions.
 	const buildAutoZoomRegions = useCallback(
 		(existingRegions: ZoomRegion[]): ZoomRegion[] => {
 			const totalMs = Math.round(duration * 1000);
@@ -1052,11 +1178,11 @@ export default function VideoEditor() {
 				depth: DEFAULT_ZOOM_DEPTH,
 				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
 				focus: clampFocusToDepth(suggestion.focus, DEFAULT_ZOOM_DEPTH),
-				focusMode: autoFocusAll ? ("auto" as const) : undefined,
+				focusMode: "auto" as const,
 				source: "auto" as const,
 			}));
 		},
-		[cursorTelemetry, duration, autoFocusAll],
+		[cursorTelemetry, duration],
 	);
 
 	// Auto-suggest zooms once per fresh recording (no existing zooms, telemetry
@@ -1284,6 +1410,7 @@ export default function VideoEditor() {
 		setSelectedSpeedId(id);
 		if (id) {
 			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
 			setSelectedTrimId(null);
 			setSelectedAnnotationId(null);
 			setSelectedBlurId(null);
@@ -1356,17 +1483,12 @@ export default function VideoEditor() {
 		(span: Span) => {
 			const id = `annotation-${nextAnnotationIdRef.current++}`;
 			const zIndex = nextAnnotationZIndexRef.current++;
-			const newRegion: AnnotationRegion = {
+			const newRegion = createTextAnnotationRegion({
 				id,
 				startMs: Math.round(span.start),
 				endMs: Math.round(span.end),
-				type: "text",
-				content: "Enter text...",
-				position: { ...DEFAULT_ANNOTATION_POSITION },
-				size: { ...DEFAULT_ANNOTATION_SIZE },
-				style: { ...DEFAULT_ANNOTATION_STYLE },
 				zIndex,
-			};
+			});
 			pushState((prev) => ({
 				annotationRegions: [...prev.annotationRegions, newRegion],
 			}));
@@ -1500,7 +1622,7 @@ export default function VideoEditor() {
 					if (region.id !== id) return region;
 					const updatedRegion = { ...region, type };
 					if (type === "text") {
-						updatedRegion.content = region.textContent || "Enter text...";
+						updatedRegion.content = resolveTextAnnotationContent(region.textContent);
 					} else if (type === "image") {
 						updatedRegion.content = region.imageContent || "";
 					} else if (type === "figure") {
@@ -1640,6 +1762,202 @@ export default function VideoEditor() {
 		[pushState],
 	);
 
+	const handleCopySelected = useCallback(() => {
+		// Copy the selected region of any kind into the clipboard. A selected blur is an
+		// annotation (type "blur" lives in annotationRegions), so it copies via that row.
+		const copyTargets = [
+			[selectedZoomId, zoomRegions, extractZoomAttributes, "zoom"],
+			[selectedSpeedId, speedRegions, extractSpeedAttributes, "speed"],
+			[
+				selectedAnnotationId ?? selectedBlurId,
+				annotationRegions,
+				extractAnnotationAttributes,
+				"annotation",
+			],
+		] as const;
+
+		for (const [id, regions, extract, kind] of copyTargets) {
+			if (!id) continue;
+			const region = (regions as readonly { id: string }[]).find((r) => r.id === id);
+			if (!region) continue; // Stale id — try the next target so the fallback toast stays reachable.
+			// Each row pairs a region list with its matching extractor, so the cast is sound.
+			setCopiedRegion((extract as (r: never) => CopiedRegion)(region as never));
+			// Blur lives in annotationRegions (type "blur") but its toast must label as "blur", not "text".
+			const labelKind = (region as { type?: string }).type === "blur" ? "blur" : kind;
+			toast.success(
+				t("regionClipboard.copied", { region: t(`regionClipboard.kinds.${labelKind}`) }),
+				{
+					id: "regionClipboard.copied",
+				},
+			);
+			return;
+		}
+		toast.info(t("regionClipboard.nothingToCopy"));
+	}, [
+		selectedZoomId,
+		selectedSpeedId,
+		selectedAnnotationId,
+		selectedBlurId,
+		zoomRegions,
+		speedRegions,
+		annotationRegions,
+		t,
+	]);
+
+	const handlePaste = useCallback(() => {
+		const copied = getCopiedRegion();
+		// If there's nothing in the clipboard, show a message and return early.
+		if (!copied) {
+			toast.info(t("regionClipboard.nothingToPaste"));
+			return;
+		}
+
+		// Apply onto the selected region of the same kind, keeping its timing.
+		if (copied.kind === "zoom" && selectedZoomId) {
+			pushState((prev) => ({
+				zoomRegions: prev.zoomRegions.map((r) =>
+					r.id === selectedZoomId ? buildZoomRegion(r, copied) : r,
+				),
+			}));
+			toast.success(
+				t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+				{
+					id: "regionClipboard.pasted",
+				},
+			);
+			return;
+		}
+		if (copied.kind === "speed" && selectedSpeedId) {
+			pushState((prev) => ({
+				speedRegions: prev.speedRegions.map((r) =>
+					r.id === selectedSpeedId ? buildSpeedRegion(r, copied) : r,
+				),
+			}));
+			toast.success(
+				t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+				{
+					id: "regionClipboard.pasted",
+				},
+			);
+			return;
+		}
+		// Blurs live in annotationRegions (type "blur"), so a selected blur is a valid target too.
+		if (copied.kind === "annotation" && (selectedAnnotationId || selectedBlurId)) {
+			const targetId = selectedAnnotationId ?? selectedBlurId;
+			pushState((prev) => ({
+				annotationRegions: prev.annotationRegions.map((r) =>
+					r.id === targetId ? replaceAnnotationAttributes(r, copied) : r,
+				),
+			}));
+			toast.success(
+				t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+				{
+					id: "regionClipboard.pasted",
+				},
+			);
+			return;
+		}
+
+		// Nothing matching selected → create a new region at the playhead.
+		const totalMs = Math.round(duration * 1000);
+		if (totalMs <= 0) return;
+		const defaultDuration = Math.min(Math.max(1000, Math.round(totalMs * 0.05)), totalMs);
+		const startPos = Math.max(0, Math.min(Math.round(currentTime * 1000), totalMs));
+
+		if (copied.kind === "zoom") {
+			const { ok, gapMs } = findFreeGapAt(zoomRegions, startPos, totalMs);
+			if (!ok) {
+				toast.error(tt("errors.cannotPlaceZoom"), {
+					description: tt("errors.zoomExistsAtLocation"),
+				});
+				return;
+			}
+			const id = `zoom-${nextZoomIdRef.current++}`;
+			const region = buildZoomRegion(
+				{
+					id,
+					startMs: startPos,
+					endMs: startPos + Math.min(defaultDuration, gapMs),
+					source: "manual",
+				},
+				copied,
+			);
+			pushState((prev) => ({ zoomRegions: [...prev.zoomRegions, region] }));
+			handleSelectZoom(id);
+			toast.success(
+				t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+				{
+					id: "regionClipboard.pasted",
+				},
+			);
+			return;
+		}
+
+		if (copied.kind === "speed") {
+			const { ok, gapMs } = findFreeGapAt(speedRegions, startPos, totalMs);
+			if (!ok) {
+				toast.error(tt("errors.cannotPlaceSpeed"), {
+					description: tt("errors.speedExistsAtLocation"),
+				});
+				return;
+			}
+			const id = `speed-${nextSpeedIdRef.current++}`;
+			const region = buildSpeedRegion(
+				{
+					id,
+					startMs: startPos,
+					endMs: startPos + Math.min(defaultDuration, gapMs),
+				},
+				copied,
+			);
+			pushState((prev) => ({ speedRegions: [...prev.speedRegions, region] }));
+			handleSelectSpeed(id);
+			toast.success(
+				t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+				{
+					id: "regionClipboard.pasted",
+				},
+			);
+			return;
+		}
+
+		// Annotation — overlaps are allowed. A brand-new region clones the full copy
+		// (type, content, styling, position), unlike the styling-only overwrite above.
+		const id = `annotation-${nextAnnotationIdRef.current++}`;
+		const region = buildPastedAnnotation(
+			{
+				id,
+				startMs: startPos,
+				endMs: Math.min(startPos + defaultDuration, totalMs),
+				zIndex: nextAnnotationZIndexRef.current++,
+			},
+			copied,
+		);
+		pushState((prev) => ({ annotationRegions: [...prev.annotationRegions, region] }));
+		handleSelectAnnotation(id);
+		toast.success(
+			t("regionClipboard.pasted", { region: t(`regionClipboard.kinds.${copied.kind}`) }),
+			{
+				id: "regionClipboard.pasted",
+			},
+		);
+	}, [
+		selectedZoomId,
+		selectedSpeedId,
+		selectedAnnotationId,
+		selectedBlurId,
+		zoomRegions,
+		speedRegions,
+		duration,
+		currentTime,
+		pushState,
+		handleSelectZoom,
+		handleSelectSpeed,
+		handleSelectAnnotation,
+		t,
+		tt,
+	]);
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			const mod = e.ctrlKey || e.metaKey;
@@ -1656,6 +1974,29 @@ export default function VideoEditor() {
 				e.stopPropagation();
 				redo();
 				return;
+			}
+
+			// Copy/paste region attributes. Skipped while typing in a field so native
+			// text copy/paste keeps working. Also only intercepted when there's an
+			// actual region selected (copy) or something on the clipboard (paste);
+			// otherwise the browser handles native copy/paste of any page selection.
+			const editingText = isTextEditingTarget(e.target);
+			if (!editingText) {
+				if (matchesShortcut(e, shortcuts.copySelected, isMac)) {
+					const hasRegionSelected =
+						selectedZoomId || selectedSpeedId || selectedAnnotationId || selectedBlurId;
+					if (hasRegionSelected) {
+						e.preventDefault();
+						handleCopySelected();
+						return;
+					}
+				} else if (matchesShortcut(e, shortcuts.paste, isMac)) {
+					if (getCopiedRegion()) {
+						e.preventDefault();
+						handlePaste();
+						return;
+					}
+				}
 			}
 
 			// Frame-step navigation (arrow keys, no modifiers)
@@ -1714,13 +2055,33 @@ export default function VideoEditor() {
 
 		window.addEventListener("keydown", handleKeyDown, { capture: true });
 		return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
-	}, [undo, redo, shortcuts, isMac]);
+	}, [
+		undo,
+		redo,
+		shortcuts,
+		isMac,
+		handleCopySelected,
+		handlePaste,
+		selectedZoomId,
+		selectedSpeedId,
+		selectedAnnotationId,
+		selectedBlurId,
+	]);
 
 	useEffect(() => {
 		if (selectedZoomId && !zoomRegions.some((region) => region.id === selectedZoomId)) {
 			setSelectedZoomId(null);
 		}
 	}, [selectedZoomId, zoomRegions]);
+
+	useEffect(() => {
+		if (
+			selectedCameraFullscreenId &&
+			!cameraFullscreenRegions.some((region) => region.id === selectedCameraFullscreenId)
+		) {
+			setSelectedCameraFullscreenId(null);
+		}
+	}, [selectedCameraFullscreenId, cameraFullscreenRegions]);
 
 	useEffect(() => {
 		if (selectedTrimId && !trimRegions.some((region) => region.id === selectedTrimId)) {
@@ -1891,6 +2252,7 @@ export default function VideoEditor() {
 						sizePreset: settings.gifConfig.sizePreset,
 						wallpaper,
 						zoomRegions,
+						cameraFullscreenRegions,
 						trimRegions,
 						speedRegions,
 						showShadow: shadowIntensity > 0,
@@ -1986,6 +2348,7 @@ export default function VideoEditor() {
 						codec: "avc1.640033",
 						wallpaper,
 						zoomRegions,
+						cameraFullscreenRegions,
 						trimRegions,
 						speedRegions,
 						showShadow: shadowIntensity > 0,
@@ -2094,6 +2457,7 @@ export default function VideoEditor() {
 			webcamVideoPath,
 			wallpaper,
 			zoomRegions,
+			cameraFullscreenRegions,
 			trimRegions,
 			speedRegions,
 			shadowIntensity,
@@ -2487,17 +2851,33 @@ export default function VideoEditor() {
 				style={{ WebkitAppRegion: "drag" } as CSSProperties}
 			>
 				<div
-					className="flex-1 flex items-center gap-1"
+					className="flex-1 flex items-center gap-1.5"
 					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
 				>
-					<div
-						className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 ${isMac ? "ml-14" : "ml-2"}`}
-					>
-						<Languages size={14} />
+					{/* Custom in-app menu bar. Replaces the native OS menu bar that is
+					    auto-hidden on Windows/Linux (see electron/windows.ts). */}
+					<EditorMenuBar
+						isMac={isMac}
+						t={rawT}
+						onNewProject={handleNewProject}
+						onLoadProject={handleLoadProject}
+						onSaveProject={handleSaveProject}
+						onSaveProjectAs={handleSaveProjectAs}
+						onQuit={() => window.electronAPI.quitApp()}
+						onUndo={undo}
+						onRedo={redo}
+						onReload={() => window.location.reload()}
+						canUndo={canUndo}
+						canRedo={canRedo}
+					/>
+
+					<div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-all duration-150 ml-1">
+						<Languages size={15} />
 						<select
+							aria-label={ts("language.title")}
 							value={locale}
 							onChange={(e) => setLocale(e.target.value as Locale)}
-							className="bg-transparent text-[11px] font-medium outline-none cursor-pointer appearance-none pr-1"
+							className="bg-transparent text-[13px] font-semibold outline-none cursor-pointer appearance-none pr-1"
 							style={{ color: "inherit" }}
 						>
 							{availableLocales.map((loc) => (
@@ -2506,29 +2886,30 @@ export default function VideoEditor() {
 								</option>
 							))}
 						</select>
+						<ChevronDown size={12} className="opacity-70 ml-0.5 flex-shrink-0" />
 					</div>
 					<button
 						type="button"
 						onClick={() => setShowNewRecordingDialog(true)}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
+						className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-all duration-150 text-[13px] font-medium"
 					>
-						<Video size={14} />
+						<Video size={15} />
 						{t("newRecording.title")}
 					</button>
 					<button
 						type="button"
 						onClick={handleLoadProject}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
+						className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-all duration-150 text-[13px] font-medium"
 					>
-						<FolderOpen size={14} />
+						<FolderOpen size={15} />
 						{ts("project.load")}
 					</button>
 					<button
 						type="button"
 						onClick={handleSaveProject}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
+						className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/[0.08] transition-all duration-150 text-[13px] font-medium"
 					>
-						<Save size={14} />
+						<Save size={15} />
 						{ts("project.save")}
 					</button>
 				</div>
@@ -2607,6 +2988,7 @@ export default function VideoEditor() {
 													onError={setError}
 													wallpaper={wallpaper}
 													zoomRegions={zoomRegions}
+													cameraFullscreenRegions={cameraFullscreenRegions}
 													selectedZoomId={selectedZoomId}
 													onSelectZoom={handleSelectZoom}
 													onZoomFocusChange={handleZoomFocusChange}
@@ -2852,6 +3234,7 @@ export default function VideoEditor() {
 								<TimelineEditor
 									videoDuration={duration}
 									currentTime={currentTime}
+									getPlaybackTimeMs={getPlaybackTimeMs}
 									onSeek={handleSeek}
 									zoomRegions={zoomRegions}
 									onZoomAdded={handleZoomAdded}
@@ -2863,6 +3246,12 @@ export default function VideoEditor() {
 									onZoomDelete={handleZoomDelete}
 									selectedZoomId={selectedZoomId}
 									onSelectZoom={handleSelectZoom}
+									cameraFullscreenRegions={cameraFullscreenRegions}
+									onCameraFullscreenAdded={handleCameraFullscreenAdded}
+									onCameraFullscreenSpanChange={handleCameraFullscreenSpanChange}
+									onCameraFullscreenDelete={handleCameraFullscreenDelete}
+									selectedCameraFullscreenId={selectedCameraFullscreenId}
+									onSelectCameraFullscreen={handleSelectCameraFullscreen}
 									trimRegions={trimRegions}
 									onTrimAdded={handleTrimAdded}
 									onTrimSpanChange={handleTrimSpanChange}

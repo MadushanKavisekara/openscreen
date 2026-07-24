@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,8 +18,37 @@ function findVcVarsAll() {
 		return explicit;
 	}
 
+	const vswhere = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe";
+	if (fs.existsSync(vswhere)) {
+		const result = spawnSync(
+			vswhere,
+			[
+				"-latest",
+				"-products",
+				"*",
+				"-requires",
+				"Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+				"-property",
+				"installationPath",
+			],
+			{ encoding: "utf8", windowsHide: true },
+		);
+		const installPath = result.stdout?.trim();
+		if (result.status === 0 && installPath) {
+			const candidate = path.join(installPath, "VC", "Auxiliary", "Build", "vcvarsall.bat");
+			if (fs.existsSync(candidate)) {
+				return candidate;
+			}
+		}
+	}
+
 	const roots = [
 		process.env.VSINSTALLDIR,
+		"C:\\Program Files\\Microsoft Visual Studio\\2026\\Community",
+		"C:\\Program Files\\Microsoft Visual Studio\\2026\\Professional",
+		"C:\\Program Files\\Microsoft Visual Studio\\2026\\Enterprise",
+		"C:\\Program Files (x86)\\Microsoft Visual Studio\\2026\\BuildTools",
+		"C:\\Program Files (x86)\\Microsoft Visual Studio\\2026\\Community",
 		"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community",
 		"C:\\Program Files\\Microsoft Visual Studio\\2022\\Professional",
 		"C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise",

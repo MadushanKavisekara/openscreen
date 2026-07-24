@@ -19,7 +19,9 @@ import {
 	useState,
 } from "react";
 import {
+	computeCameraFullscreenTargetRect,
 	getWebcamLayoutCssBoxShadow,
+	lerpRect,
 	reactiveWebcamScale,
 	type Size,
 	type StyledRenderRect,
@@ -56,18 +58,22 @@ import {
 import {
 	type AnnotationRegion,
 	type BlurData,
+	type CameraFullscreenRegion,
 	type CursorTelemetryPoint,
 	computeRotation3DContainScale,
+	DEFAULT_CROP_REGION,
 	DEFAULT_ROTATION_3D,
 	getZoomScale,
 	isRotation3DIdentity,
 	lerpRotation3D,
+	MAX_NATIVE_PLAYBACK_RATE,
 	rotation3DPerspective,
 	type SpeedRegion,
 	type TrimRegion,
 	type ZoomFocus,
 	type ZoomRegion,
 } from "./types";
+import { computeCameraFullscreenProgress } from "./videoPlayback/cameraFullscreenUtils";
 import { AUTO_FOLLOW_PARAMS, DEFAULT_FOCUS } from "./videoPlayback/constants";
 import { advanceFollowFocus } from "./videoPlayback/cursorFollowUtils";
 import {
@@ -108,6 +114,7 @@ interface VideoPlaybackProps {
 	onError: (error: string) => void;
 	wallpaper?: string;
 	zoomRegions: ZoomRegion[];
+	cameraFullscreenRegions?: CameraFullscreenRegion[];
 	selectedZoomId: string | null;
 	onSelectZoom: (id: string | null) => void;
 	onZoomFocusChange: (id: string, focus: ZoomFocus) => void;
@@ -158,6 +165,14 @@ export interface VideoPlaybackRef {
 	containerRef: React.RefObject<HTMLDivElement>;
 	play: () => Promise<void>;
 	pause: () => void;
+	/**
+	 * Clears the memoized last-resolved-duration guard so the next metadata load
+	 * re-syncs `duration` even if the video's real (resolved) duration happens to
+	 * match a value already seen — needed when a caller (e.g. loading a saved
+	 * project) sets `duration` to something else in between, which the guard has
+	 * no other way to detect.
+	 */
+	resetDurationResolution: () => void;
 }
 
 function getResolvedVideoDuration(video: HTMLVideoElement): number | null {
@@ -215,6 +230,33 @@ function enableAllPreviewAudioTracks(video: HTMLVideoElement) {
 	}
 }
 
+/**
+ * Builds a `webglcontextlost` handler for the preview Pixi canvas.
+ *
+ * On Linux/Wayland the preview can lose its WebGL context during heavy GPU
+ * usage from the exporter (e.g. the VideoEncoder's hardware path on
+ * Mesa/EGL, or the Linux-specific CPU readback in `frameRenderer.ts`).
+ * Without recovery the video sprite never reappears — only the wallpaper
+ * (rendered to a 2D canvas) stays visible. See issue #8.
+ *
+ * `preventDefault()` opts in to the restoration attempt so Chromium can
+ * fire `webglcontextrestored`. The caller is expected to bump `regenerate`
+ * so React tears the broken app down and rebuilds from scratch on the
+ * next mount.
+ */
+export function createWebGLContextLostHandler(params: {
+	generation: number;
+	regenerate: () => void;
+}): (event: Event) => void {
+	return (event: Event) => {
+		event.preventDefault();
+		console.warn("[VideoPlayback] WebGL context lost, recreating Pixi app", {
+			generation: params.generation,
+		});
+		params.regenerate();
+	};
+}
+
 const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 	(
 		{
@@ -235,6 +277,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			onError,
 			wallpaper,
 			zoomRegions,
+			cameraFullscreenRegions = [],
 			selectedZoomId,
 			onSelectZoom,
 			onZoomFocusChange,
@@ -290,6 +333,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cameraContainerRef = useRef<Container | null>(null);
 		const timeUpdateAnimationRef = useRef<number | null>(null);
 		const [pixiReady, setPixiReady] = useState(false);
+		const [pixiGeneration, setPixiGeneration] = useState(0);
 		const [videoReady, setVideoReady] = useState(false);
 		const [supplementalAudioPath, setSupplementalAudioPath] = useState<string | null>(null);
 		const [overlaySize, setOverlaySize] = useState({ width: 800, height: 600 });
@@ -300,9 +344,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const composite3DRef = useRef<HTMLDivElement | null>(null);
 		const outerWrapperRef = useRef<HTMLDivElement | null>(null);
 		const [webcamLayout, setWebcamLayout] = useState<StyledRenderRect | null>(null);
+		const webcamLayoutRef = useRef<StyledRenderRect | null>(null);
 		const [webcamDimensions, setWebcamDimensions] = useState<Size | null>(null);
 		const currentTimeRef = useRef(0);
 		const zoomRegionsRef = useRef<ZoomRegion[]>([]);
+		const cameraFullscreenRegionsRef = useRef<CameraFullscreenRegion[]>([]);
 		const cursorTelemetryRef = useRef<CursorTelemetryPoint[]>([]);
 		const cursorClickTimestampsRef = useRef<number[]>([]);
 		const selectedZoomIdRef = useRef<string | null>(null);
@@ -336,6 +382,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const scrubEndTimerRef = useRef<number | null>(null);
 		const [isScrubbing, setIsScrubbing] = useState(false);
 		const allowPlaybackRef = useRef(false);
+		// Seek-stepping state for speed regions above the native playbackRate cap (16×).
+		const seekSteppingRef = useRef(false);
+		const stepVirtualSecRef = useRef(0);
+		const stepLastTsRef = useRef(0);
+		const stepPrevMutedRef = useRef(false);
 		const lockedVideoDimensionsRef = useRef<{
 			width: number;
 			height: number;
@@ -572,6 +623,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				baseMaskRef.current = result.maskRect;
 				borderRadiusRef.current = result.maskBorderRadius;
 				cropBoundsRef.current = result.cropBounds;
+				webcamLayoutRef.current = result.webcamRect;
 				setWebcamLayout(result.webcamRect);
 
 				// Reset camera container to identity
@@ -630,7 +682,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					const supplementalAudio = supplementalAudioRef.current;
 					if (supplementalAudio) {
 						supplementalAudio.currentTime = vid.currentTime;
-						supplementalAudio.playbackRate = vid.playbackRate;
+						// vid.playbackRate is already capped at the native ceiling; clamp
+						// defensively so the supplemental track never throws either.
+						supplementalAudio.playbackRate = Math.min(vid.playbackRate, MAX_NATIVE_PLAYBACK_RATE);
 						await supplementalAudio.play().catch(() => {
 							// The main video remains the source of truth for playback state.
 						});
@@ -648,6 +702,19 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				}
 				video.pause();
 				supplementalAudioRef.current?.pause();
+			},
+			resetDurationResolution: () => {
+				lastResolvedDurationRef.current = null;
+				// If the video element is already loaded (e.g. reloading a project that
+				// references the same file, so its src never actually changes and
+				// `loadedmetadata` won't fire again), clearing the guard alone leaves
+				// nothing to trigger a re-sync. Resolve immediately in that case too.
+				const video = videoRef.current;
+				if (video && video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+					if (!syncResolvedDuration(video)) {
+						forceResolveDuration(video);
+					}
+				}
 			},
 		}));
 
@@ -773,6 +840,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			zoomRegionsRef.current = zoomRegions;
 		}, [zoomRegions]);
+
+		useEffect(() => {
+			cameraFullscreenRegionsRef.current = cameraFullscreenRegions;
+		}, [cameraFullscreenRegions]);
 
 		useEffect(() => {
 			cursorTelemetryRef.current = cursorTelemetry;
@@ -992,6 +1063,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 			let mounted = true;
 			let app: Application | null = null;
+			// Declared outside the async IIFE so the cleanup function can
+			// detach them after Pixi tears the canvas down.
+			let handleContextLost: ((event: Event) => void) | null = null;
+			let handleContextRestored: (() => void) | null = null;
 
 			(async () => {
 				let cursorOverlayEnabled = true;
@@ -1003,14 +1078,19 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 				app = new Application();
 
-				await app.init({
-					width: container.clientWidth,
-					height: container.clientHeight,
-					backgroundAlpha: 0,
-					antialias: true,
-					resolution: window.devicePixelRatio || 1,
-					autoDensity: true,
-				});
+				try {
+					await app.init({
+						width: container.clientWidth,
+						height: container.clientHeight,
+						backgroundAlpha: 0,
+						antialias: true,
+						resolution: window.devicePixelRatio || 1,
+						autoDensity: true,
+					});
+				} catch (error) {
+					console.error("[VideoPlayback] Pixi init failed:", error);
+					return;
+				}
 
 				app.ticker.maxFPS = 60;
 
@@ -1025,6 +1105,24 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 				appRef.current = app;
 				container.appendChild(app.canvas);
+
+				// Recover from WebGL context loss. On Linux/Wayland the preview
+				// Pixi app can lose its context during heavy GPU usage from the
+				// exporter (e.g. the VideoEncoder's hardware path on Mesa/EGL).
+				// Without recovery the video sprite never reappears — only the
+				// wallpaper (rendered to a 2D canvas) stays visible. See issue
+				// #8. preventDefault() opts in to the restoration attempt so
+				// Chromium can fire webglcontextrestored, then we tear the
+				// broken app down and rebuild from scratch on the next mount.
+				handleContextLost = createWebGLContextLostHandler({
+					generation: pixiGeneration,
+					regenerate: () => setPixiGeneration((g) => g + 1),
+				});
+				handleContextRestored = () => {
+					console.info("[VideoPlayback] WebGL context restored", { generation: pixiGeneration });
+				};
+				app.canvas.addEventListener("webglcontextlost", handleContextLost);
+				app.canvas.addEventListener("webglcontextrestored", handleContextRestored);
 
 				// Camera container - this will be scaled/positioned for zoom
 				const cameraContainer = new Container();
@@ -1061,6 +1159,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				nativeCursorTextureIdRef.current = null;
 				nativeCursorImageIdRef.current = null;
 				if (app && app.renderer) {
+					// Detach the recovery listeners from the canvas before the
+					// app tears it down so we don't leak handlers on a detached
+					// element.
+					if (handleContextLost) {
+						app.canvas.removeEventListener("webglcontextlost", handleContextLost);
+					}
+					if (handleContextRestored) {
+						app.canvas.removeEventListener("webglcontextrestored", handleContextRestored);
+					}
 					app.destroy(true, {
 						children: true,
 						texture: true,
@@ -1072,7 +1179,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoContainerRef.current = null;
 				videoSpriteRef.current = null;
 			};
-		}, []);
+		}, [pixiGeneration]);
 
 		useEffect(() => {
 			if (!videoPath) {
@@ -1136,7 +1243,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				speedRegions.find(
 					(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
 				) ?? null;
-			supplementalAudio.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			const activeSpeed = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+
+			// Above the native rate the main preview frame-steps silently; a media
+			// element can't play that fast (setting playbackRate > 16 throws), so mute
+			// the supplemental track by pausing it for the duration of the region.
+			if (activeSpeed > MAX_NATIVE_PLAYBACK_RATE) {
+				supplementalAudio.pause();
+				return;
+			}
+			supplementalAudio.playbackRate = activeSpeed;
 
 			if (!isPlaying) {
 				supplementalAudio.pause();
@@ -1213,21 +1329,26 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			layoutVideoContentRef.current?.();
 			video.pause();
 
-			const { handlePlay, handlePause, handleSeeked, handleSeeking } = createVideoEventHandlers({
-				video,
-				isSeekingRef,
-				isPlayingRef,
-				allowPlaybackRef,
-				currentTimeRef,
-				timeUpdateAnimationRef,
-				onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
-				onTimeUpdate: (time) => onTimeUpdateRef.current(time),
-				trimRegionsRef,
-				speedRegionsRef,
-				isScrubbingRef,
-				scrubEndTimerRef,
-				onScrubChange: (scrubbing) => setIsScrubbing(scrubbing),
-			});
+			const { handlePlay, handlePause, handleSeeked, handleSeeking, dispose } =
+				createVideoEventHandlers({
+					video,
+					isSeekingRef,
+					isPlayingRef,
+					allowPlaybackRef,
+					currentTimeRef,
+					timeUpdateAnimationRef,
+					onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
+					onTimeUpdate: (time) => onTimeUpdateRef.current(time),
+					trimRegionsRef,
+					speedRegionsRef,
+					isScrubbingRef,
+					scrubEndTimerRef,
+					onScrubChange: (scrubbing) => setIsScrubbing(scrubbing),
+					seekSteppingRef,
+					stepVirtualSecRef,
+					stepLastTsRef,
+					stepPrevMutedRef,
+				});
 
 			video.addEventListener("play", handlePlay);
 			video.addEventListener("pause", handlePause);
@@ -1245,6 +1366,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				if (timeUpdateAnimationRef.current) {
 					cancelAnimationFrame(timeUpdateAnimationRef.current);
 				}
+				dispose();
 
 				if (videoSprite) {
 					videoContainer.removeChild(videoSprite);
@@ -1325,17 +1447,51 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				// corner (bottom-right by default) so it stays flush instead of drifting to center.
 				const webcamWrapper = webcamWrapperRef.current;
 				if (webcamWrapper) {
-					const reactive =
-						webcamReactiveZoomRef.current && webcamLayoutPresetRef.current === "picture-in-picture";
-					const factor = reactive ? reactiveWebcamScale(state.appliedScale) : 1;
-					if (factor < 1) {
-						const pos = webcamPositionRef.current;
-						const originX = (pos ? pos.cx >= 0.5 : true) ? "100%" : "0%";
-						const originY = (pos ? pos.cy >= 0.5 : true) ? "100%" : "0%";
-						webcamWrapper.style.transformOrigin = `${originX} ${originY}`;
-						webcamWrapper.style.transform = `scale(${factor})`;
+					const cameraFullProgress = computeCameraFullscreenProgress(
+						cameraFullscreenRegionsRef.current,
+						currentTimeRef.current,
+					);
+					const baseRect = webcamLayoutRef.current;
+
+					if (cameraFullProgress > 0 && baseRect && baseRect.width > 0 && baseRect.height > 0) {
+						// Full Camera takes over the webcam's size/position entirely: it grows to
+						// cover the whole stage. Like the reactive-zoom branch below, this only ever
+						// touches `transform` (never left/top/width/height, which stay driven by the
+						// `webcamLayout` React state in the JSX style prop) so it can't race React's
+						// re-render on every currentTime update. The base rect is lerped toward a
+						// full-stage rect and expressed as a translate+scale from the base rect's own
+						// box, matching the CSS transform box (border-box, top-left origin).
+						const stage = stageSizeRef.current;
+						const targetRect = computeCameraFullscreenTargetRect(stage, baseRect);
+						const fullRect: StyledRenderRect = {
+							x: targetRect.x,
+							y: targetRect.y,
+							width: targetRect.width,
+							height: targetRect.height,
+							borderRadius: 0,
+							maskShape: baseRect.maskShape,
+						};
+						const drawRect = lerpRect(baseRect, fullRect, cameraFullProgress);
+						const scaleX = drawRect.width / baseRect.width;
+						const scaleY = drawRect.height / baseRect.height;
+						const translateX = drawRect.x - baseRect.x;
+						const translateY = drawRect.y - baseRect.y;
+						webcamWrapper.style.transformOrigin = "0% 0%";
+						webcamWrapper.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
 					} else {
-						webcamWrapper.style.transform = "";
+						const reactive =
+							webcamReactiveZoomRef.current &&
+							webcamLayoutPresetRef.current === "picture-in-picture";
+						const factor = reactive ? reactiveWebcamScale(state.appliedScale) : 1;
+						if (factor < 1) {
+							const pos = webcamPositionRef.current;
+							const originX = (pos ? pos.cx >= 0.5 : true) ? "100%" : "0%";
+							const originY = (pos ? pos.cy >= 0.5 : true) ? "100%" : "0%";
+							webcamWrapper.style.transformOrigin = `${originX} ${originY}`;
+							webcamWrapper.style.transform = `scale(${factor})`;
+						} else {
+							webcamWrapper.style.transform = "";
+						}
 					}
 				}
 			};
@@ -1541,6 +1697,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						baseMaskRef.current,
 						showCursorRef.current && !hasNativeCursorRecordingRef.current,
 						!isPlayingRef.current || isSeekingRef.current,
+						cropRegionRef.current,
 					);
 				}
 
@@ -1579,7 +1736,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								: frame.sample;
 							const cameraContainer = cameraContainerRef.current;
 							const videoContainer = videoContainerRef.current;
-							const cropRegionValue = cropRegionRef.current ?? { x: 0, y: 0, width: 1, height: 1 };
+							const cropRegionValue = cropRegionRef.current ?? DEFAULT_CROP_REGION;
 							const projectedLocalPoint = projectNativeCursorToLocal({
 								cropRegion: cropRegionValue,
 								maskRect: baseMaskRef.current,
@@ -1616,7 +1773,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									getNativeCursorClickBounceScale(cursorClickBounceRef.current, bounceProgress);
 								// Normalize cursor size to the displayed video width so the cursor
 								// appears at the same fraction of the video in both preview and export.
-								const crop = cropRegionRef.current ?? { x: 0, y: 0, width: 1, height: 1 };
+								const crop = cropRegionRef.current ?? DEFAULT_CROP_REGION;
 								const croppedVideoWidth = (videoRef.current?.videoWidth ?? 0) * crop.width;
 								const sizeNorm =
 									croppedVideoWidth > 0 ? baseMaskRef.current.width / croppedVideoWidth : 1;
@@ -1826,7 +1983,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				speedRegions.find(
 					(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
 				) ?? null;
-			webcamVideo.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			// Cap the (silent) webcam element at the native rate so playbackRate never throws.
+			webcamVideo.playbackRate = Math.min(
+				activeSpeedRegion ? activeSpeedRegion.speed : 1,
+				MAX_NATIVE_PLAYBACK_RATE,
+			);
 
 			if (!isPlaying) {
 				webcamVideo.pause();
@@ -1836,7 +1997,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return;
 			}
 
-			if (Math.abs(webcamVideo.currentTime - currentTime) > 0.15) {
+			// While the main video is seek-stepping (>16×), the playhead advances far
+			// faster than this 16×-capped element can seek; resyncing every frame would
+			// keep its decoder perpetually mid-seek and freeze it — the same failure the
+			// main video's throttle fixes. Let the muted webcam play best-effort at the
+			// clamped rate instead (a small lag is fine).
+			if (!seekSteppingRef.current && Math.abs(webcamVideo.currentTime - currentTime) > 0.15) {
 				webcamVideo.currentTime = currentTime;
 			}
 

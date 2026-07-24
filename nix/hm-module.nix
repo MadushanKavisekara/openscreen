@@ -1,7 +1,7 @@
 # Home Manager module for OpenScreen
 # Usage in flake-based Home Manager config:
 #
-#   inputs.openscreen.url = "github:siddharthvaddem/openscreen";
+#   inputs.openscreen.url = "github:EtienneLescot/openscreen";
 #
 #   { inputs, ... }: {
 #     imports = [ inputs.openscreen.homeManagerModules.default ];

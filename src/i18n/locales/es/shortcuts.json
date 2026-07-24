@@ -22,8 +22,11 @@
 		"addAnnotation": "Agregar anotación",
 		"addBlur": "Agregar desenfoque",
 		"addKeyframe": "Agregar fotograma clave",
+		"addCameraFullscreen": "Agregar cámara a pantalla completa",
 		"deleteSelected": "Eliminar seleccionado",
-		"playPause": "Reproducir / Pausar"
+		"playPause": "Reproducir / Pausar",
+		"copySelected": "Copiar selección",
+		"paste": "Pegar"
 	},
 	"fixedActions": {
 		"undo": "Deshacer",

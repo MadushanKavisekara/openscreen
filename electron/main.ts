@@ -12,6 +12,7 @@ import {
 	Tray,
 } from "electron";
 import { ShortcutBinding } from "../src/lib/shortcuts";
+import { isDiagnosticModeEnabled, mainLogBuffer } from "./diagnostics/main-log-buffer";
 import {
 	loadAndRegisterGlobalShortcut,
 	registerOpenAppShortcut,
@@ -19,10 +20,12 @@ import {
 } from "./globalShortcut";
 import { mainT, setMainLocale } from "./i18n";
 import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
+import { acquireStableInstanceLock } from "./singleInstanceLock";
 import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
 	createHudOverlayWindow,
+	createNotesWindow,
 	createSourceSelectorWindow,
 } from "./windows";
 
@@ -43,6 +46,12 @@ if (process.platform === "linux") {
 		app.commandLine.appendSwitch("ozone-platform", "wayland");
 		// Enable WebRTCPipeWireCapturer for screen capture on Wayland
 		app.commandLine.appendSwitch("enable-features", "WaylandWindowDrag,WebRTCPipeWireCapturer");
+		// Chromium's Wayland Ozone backend can't use Vulkan. When it tries, the WebRTC
+		// PipeWire capturer fails to import DMA-BUF frames into EGL (EGL_BAD_MATCH), the
+		// stream renegotiates, and screen recording yields no usable frames. Force the
+		// GL/EGL path so DMA-BUF import works. (Chromium itself logs this suggestion:
+		// "'--ozone-platform=wayland' is not compatible with Vulkan ... disabling Vulkan".)
+		app.commandLine.appendSwitch("disable-features", "Vulkan");
 	}
 }
 
@@ -82,6 +91,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let mainWindow: BrowserWindow | null = null;
 let sourceSelectorWindow: BrowserWindow | null = null;
 let countdownOverlayWindow: BrowserWindow | null = null;
+let notesWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let selectedSourceName = "";
 const isMac = process.platform === "darwin";
@@ -92,6 +102,10 @@ const defaultTrayIcon = getTrayIcon("openscreen.png", trayIconSize);
 const recordingTrayIcon = getTrayIcon("rec-button.png", trayIconSize);
 
 function createWindow() {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		return;
+	}
+
 	mainWindow = createHudOverlayWindow();
 }
 
@@ -106,6 +120,19 @@ function showMainWindow() {
 	}
 
 	createWindow();
+}
+
+const stableInstanceLock = acquireStableInstanceLock();
+const hasElectronSingleInstanceLock = app.requestSingleInstanceLock();
+const hasSingleInstanceLock = Boolean(stableInstanceLock && hasElectronSingleInstanceLock);
+
+if (hasSingleInstanceLock) {
+	app.on("second-instance", () => {
+		showMainWindow();
+	});
+} else {
+	stableInstanceLock?.release();
+	app.quit();
 }
 
 function isEditorWindow(window: BrowserWindow) {
@@ -349,6 +376,12 @@ ipcMain.on("set-has-unsaved-changes", (_, hasChanges: boolean) => {
 	editorHasUnsavedChanges = hasChanges;
 });
 
+// Quit requested from the editor's in-app File menu. Mirrors the native
+// menu's role:"quit" so the unsaved-changes close flow still runs.
+ipcMain.on("app-quit", () => {
+	app.quit();
+});
+
 function forceCloseEditorWindow(windowToClose: BrowserWindow | null) {
 	if (!windowToClose || windowToClose.isDestroyed()) return;
 
@@ -411,8 +444,24 @@ function createSourceSelectorWindowWrapper() {
 	sourceSelectorWindow = createSourceSelectorWindow();
 	sourceSelectorWindow.on("closed", () => {
 		sourceSelectorWindow = null;
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			mainWindow.webContents.send("source-selector-closed");
+		}
 	});
 	return sourceSelectorWindow;
+}
+
+function createNotesWindowWrapper() {
+	{
+		notesWindow = createNotesWindow();
+		notesWindow.on("closed", () => {
+			notesWindow = null;
+			if (mainWindow && !mainWindow.isDestroyed()) {
+				mainWindow.webContents.send("notes-window-closed");
+			}
+		});
+		return notesWindow;
+	}
 }
 
 function createCountdownOverlayWindowWrapper() {
@@ -451,9 +500,17 @@ app.on("activate", () => {
 
 app.on("will-quit", () => {
 	unregisterAllGlobalShortcuts();
+	stableInstanceLock?.release();
 });
 
-app.whenReady().then(async () => {
+const appReady = hasSingleInstanceLock ? app.whenReady() : null;
+
+appReady?.then(async () => {
+	if (isDiagnosticModeEnabled()) {
+		mainLogBuffer.install();
+		console.info("[diagnostic] OPENSCREEN_DIAGNOSTIC=1, capturing console.* into ring buffer");
+	}
+
 	// Force "regular" activation policy so the Dock icon appears. The HUD overlay
 	// (transparent, frameless, skipTaskbar) is the first window, and AppKit would
 	// otherwise classify us as an accessory app.
@@ -545,8 +602,10 @@ app.whenReady().then(async () => {
 		createEditorWindowWrapper,
 		createSourceSelectorWindowWrapper,
 		createCountdownOverlayWindowWrapper,
+		createNotesWindowWrapper,
 		() => mainWindow,
 		() => sourceSelectorWindow,
+		() => notesWindow,
 		() => countdownOverlayWindow,
 		(recording: boolean, sourceName: string) => {
 			selectedSourceName = sourceName;

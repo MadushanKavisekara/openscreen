@@ -22,8 +22,11 @@
 		"addAnnotation": "Ajouter une annotation",
 		"addBlur": "Ajouter un flou",
 		"addKeyframe": "Ajouter une image-clé",
+		"addCameraFullscreen": "Ajouter une caméra en plein écran",
 		"deleteSelected": "Supprimer la sélection",
-		"playPause": "Lecture / Pause"
+		"playPause": "Lecture / Pause",
+		"copySelected": "Copier la sélection",
+		"paste": "Coller"
 	},
 	"fixedActions": {
 		"undo": "Annuler",

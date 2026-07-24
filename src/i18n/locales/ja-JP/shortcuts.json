@@ -22,8 +22,11 @@
 		"addAnnotation": "注釈を追加",
 		"addBlur": "ぼかしを追加",
 		"addKeyframe": "キーフレームを追加",
+		"addCameraFullscreen": "フルスクリーンカメラを追加",
 		"deleteSelected": "選択を削除",
-		"playPause": "再生 / 一時停止"
+		"playPause": "再生 / 一時停止",
+		"copySelected": "選択をコピー",
+		"paste": "貼り付け"
 	},
 	"fixedActions": {
 		"undo": "元に戻す",

@@ -196,6 +196,13 @@ export function createEditorWindow(): BrowserWindow {
 
 	win.maximize();
 
+	// The editor renders its own File/Edit/View menu bar in the custom titlebar,
+	// so hide the native OS menu bar on Windows/Linux (it stays reachable via Alt).
+	// macOS keeps its global menu bar.
+	if (process.platform !== "darwin") {
+		win.setAutoHideMenuBar(true);
+	}
+
 	// Show only once painted to avoid a white flash on cold Vite start.
 	win.once("ready-to-show", () => {
 		if (!HEADLESS) win.show();
@@ -315,6 +322,52 @@ export function createCountdownOverlayWindow(): BrowserWindow {
 	} else {
 		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
 			query: { windowType: "countdown-overlay" },
+		});
+	}
+
+	return win;
+}
+
+// Frameless Notes Window for taking notes during a recording.
+export function createNotesWindow(): BrowserWindow {
+	const win = new BrowserWindow({
+		width: 400,
+		height: 540,
+		minWidth: 360,
+		minHeight: 400,
+		maxWidth: 640,
+		maxHeight: 720,
+		title: "OpenScreen - Notes",
+		backgroundColor: "#09090b",
+		resizable: true,
+		alwaysOnTop: true,
+		skipTaskbar: false,
+		show: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.mjs"),
+			additionalArguments: [ASSET_BASE_URL_ARG],
+			nodeIntegration: false,
+			contextIsolation: true,
+			backgroundThrottling: false,
+		},
+	});
+
+	// Match the editor: no native OS menu bar on Windows/Linux (reachable via Alt).
+	if (process.platform !== "darwin") {
+		win.setAutoHideMenuBar(true);
+	}
+
+	win.setContentProtection(true);
+	win.once("ready-to-show", () => {
+		win.setContentProtection(true);
+		win.show();
+	});
+
+	if (VITE_DEV_SERVER_URL) {
+		win.loadURL(VITE_DEV_SERVER_URL + "?showNotes=true");
+	} else {
+		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
+			query: { showNotes: "true" },
 		});
 	}
 
