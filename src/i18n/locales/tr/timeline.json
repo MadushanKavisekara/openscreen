@@ -6,7 +6,9 @@
 		"addAnnotation": "Açıklama Ekle (A)",
 		"addSpeed": "Hız Ekle (S)",
 		"addBlur": "Bulanık ekle (B)",
-		"addCameraFullscreen": "Tam Ekran Kamera Ekle (C)"
+		"addCameraFullscreen": "Tam Ekran Kamera Ekle (C)",
+		"split": "İmleçte böl (T)",
+		"deleteClip": "Klibi sil (ripple)"
 	},
 	"hints": {
 		"pressZoom": "Yakınlaştırma eklemek için Z tuşuna basın",

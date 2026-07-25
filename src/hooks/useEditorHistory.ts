@@ -34,6 +34,8 @@ export interface EditorState {
 	 * per-zoom Focus Mode selector is locked. */
 	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
+	/** Source-time (ms) cut points that subdivide the timeline into selectable clips. */
+	splitPoints: number[];
 	speedRegions: SpeedRegion[];
 	annotationRegions: AnnotationRegion[];
 	cropRegion: CropRegion;
@@ -59,6 +61,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 	autoZoomEnabled: true,
 	autoFocusAll: false,
 	trimRegions: [],
+	splitPoints: [],
 	speedRegions: [],
 	annotationRegions: [],
 	cropRegion: DEFAULT_CROP_REGION,

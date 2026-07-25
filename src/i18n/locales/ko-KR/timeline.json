@@ -6,7 +6,9 @@
 		"addAnnotation": "주석 추가 (A)",
 		"addSpeed": "속도 추가 (S)",
 		"addBlur": "블러 추가 (B)",
-		"addCameraFullscreen": "전체 화면 카메라 추가 (C)"
+		"addCameraFullscreen": "전체 화면 카메라 추가 (C)",
+		"split": "재생 위치에서 분할 (T)",
+		"deleteClip": "클립 삭제(리플)"
 	},
 	"hints": {
 		"pressZoom": "Z를 눌러 줌 추가",

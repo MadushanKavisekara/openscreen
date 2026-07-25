@@ -6,7 +6,9 @@
 		"addAnnotation": "新增標註 (A)",
 		"addSpeed": "新增速度 (S)",
 		"addBlur": "新增模糊 (B)",
-		"addCameraFullscreen": "新增全螢幕攝影機 (C)"
+		"addCameraFullscreen": "新增全螢幕攝影機 (C)",
+		"split": "在播放頭處分割 (T)",
+		"deleteClip": "刪除片段（漣漪）"
 	},
 	"hints": {
 		"pressZoom": "按 Z 新增縮放",

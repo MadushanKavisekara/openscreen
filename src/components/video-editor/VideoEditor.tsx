@@ -68,6 +68,7 @@ import {
 	getNativeAspectRatioValue,
 	isPortraitAspectRatio,
 } from "@/utils/aspectRatioUtils";
+import { computeClipDeletion, computeSplit } from "./clipEditing";
 import { EditorEmptyState } from "./EditorEmptyState";
 import { EditorMenuBar } from "./EditorMenuBar";
 import { ExportDialog } from "./ExportDialog";
@@ -107,6 +108,14 @@ import { SettingsPanel } from "./SettingsPanel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
+	buildTimeMap,
+	type Clip,
+	computeClips,
+	editToSource,
+	sourceToEdit,
+	toEditSpanRegions,
+} from "./timeMap";
+import {
 	type AnnotationRegion,
 	type BlurData,
 	type CameraFullscreenRegion,
@@ -124,7 +133,6 @@ import {
 	type Rotation3DPreset,
 	resolveTextAnnotationContent,
 	type SpeedRegion,
-	type TrimRegion,
 	ZOOM_DEPTH_SCALES,
 	type ZoomDepth,
 	type ZoomFocus,
@@ -214,6 +222,7 @@ export default function VideoEditor() {
 		autoZoomEnabled,
 		autoFocusAll,
 		trimRegions,
+		splitPoints,
 		speedRegions,
 		annotationRegions,
 		cropRegion,
@@ -252,6 +261,8 @@ export default function VideoEditor() {
 	const [selectedCameraFullscreenId, setSelectedCameraFullscreenId] = useState<string | null>(null);
 	const [isPreviewingZoom, setIsPreviewingZoom] = useState(false);
 	const [selectedTrimId, setSelectedTrimId] = useState<string | null>(null);
+	// Ripple editing: the currently selected clip on the edit timeline (by source start ms).
+	const [selectedClipStartMs, setSelectedClipStartMs] = useState<number | null>(null);
 	const [selectedSpeedId, setSelectedSpeedId] = useState<string | null>(null);
 	const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
 	const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
@@ -450,6 +461,7 @@ export default function VideoEditor() {
 				autoZoomEnabled: normalizedEditor.autoZoomEnabled,
 				autoFocusAll: normalizedEditor.autoFocusAll,
 				trimRegions: normalizedEditor.trimRegions,
+				splitPoints: normalizedEditor.splitPoints,
 				speedRegions: normalizedEditor.speedRegions,
 				annotationRegions: normalizedEditor.annotationRegions,
 				aspectRatio: normalizedEditor.aspectRatio,
@@ -542,6 +554,7 @@ export default function VideoEditor() {
 			autoZoomEnabled,
 			autoFocusAll,
 			trimRegions,
+			splitPoints,
 			speedRegions,
 			annotationRegions,
 			aspectRatio,
@@ -574,6 +587,7 @@ export default function VideoEditor() {
 		autoZoomEnabled,
 		autoFocusAll,
 		trimRegions,
+		splitPoints,
 		speedRegions,
 		annotationRegions,
 		aspectRatio,
@@ -703,6 +717,7 @@ export default function VideoEditor() {
 				autoZoomEnabled,
 				autoFocusAll,
 				trimRegions,
+				splitPoints,
 				speedRegions,
 				annotationRegions,
 				aspectRatio,
@@ -775,6 +790,7 @@ export default function VideoEditor() {
 			autoZoomEnabled,
 			autoFocusAll,
 			trimRegions,
+			splitPoints,
 			speedRegions,
 			annotationRegions,
 			aspectRatio,
@@ -1067,17 +1083,6 @@ export default function VideoEditor() {
 		}
 	}, []);
 
-	const handleSelectTrim = useCallback((id: string | null) => {
-		setSelectedTrimId(id);
-		if (id) {
-			setSelectedZoomId(null);
-			setSelectedCameraFullscreenId(null);
-			setSelectedSpeedId(null);
-			setSelectedAnnotationId(null);
-			setSelectedBlurId(null);
-		}
-	}, []);
-
 	const handleSelectAnnotation = useCallback((id: string | null) => {
 		setSelectedAnnotationId(id);
 		if (id) {
@@ -1266,24 +1271,6 @@ export default function VideoEditor() {
 		[pushState],
 	);
 
-	const handleTrimAdded = useCallback(
-		(span: Span) => {
-			const id = `trim-${nextTrimIdRef.current++}`;
-			const newRegion: TrimRegion = {
-				id,
-				startMs: Math.round(span.start),
-				endMs: Math.round(span.end),
-			};
-			pushState((prev) => ({ trimRegions: [...prev.trimRegions, newRegion] }));
-			setSelectedTrimId(id);
-			setSelectedZoomId(null);
-			setSelectedSpeedId(null);
-			setSelectedAnnotationId(null);
-			setSelectedBlurId(null);
-		},
-		[pushState],
-	);
-
 	const handleZoomSpanChange = useCallback(
 		(id: string, span: Span) => {
 			pushState((prev) => ({
@@ -1294,23 +1281,6 @@ export default function VideoEditor() {
 								startMs: Math.round(span.start),
 								endMs: Math.round(span.end),
 								source: "manual",
-							}
-						: region,
-				),
-			}));
-		},
-		[pushState],
-	);
-
-	const handleTrimSpanChange = useCallback(
-		(id: string, span: Span) => {
-			pushState((prev) => ({
-				trimRegions: prev.trimRegions.map((region) =>
-					region.id === id
-						? {
-								...region,
-								startMs: Math.round(span.start),
-								endMs: Math.round(span.end),
 							}
 						: region,
 				),
@@ -1616,6 +1586,140 @@ export default function VideoEditor() {
 			}
 		},
 		[selectedAnnotationId, selectedBlurId, pushState],
+	);
+
+	// ── Ripple editing adapter ──────────────────────────────────────────────
+	// The editor stores everything in source time; the timeline renders in edit
+	// time (source minus the removed cuts, closed up). This time map — derived
+	// from the trim regions — is the single translation layer. VideoPlayback
+	// stays in source time and is untouched by any of this.
+	const sourceDurationMs = Math.round(duration * 1000);
+	const timeMap = useMemo(
+		() => buildTimeMap(sourceDurationMs, trimRegions),
+		[sourceDurationMs, trimRegions],
+	);
+	const editDurationSec = timeMap.editDurationMs / 1000;
+	const editCurrentTimeSec = sourceToEdit(timeMap, currentTime * 1000) / 1000;
+	const clips = useMemo(() => computeClips(timeMap, splitPoints), [timeMap, splitPoints]);
+
+	// Region rows re-expressed on the edit timeline for rendering.
+	const editZoomRegions = useMemo(
+		() => toEditSpanRegions(zoomRegions, timeMap),
+		[zoomRegions, timeMap],
+	);
+	const editCameraFullscreenRegions = useMemo(
+		() => toEditSpanRegions(cameraFullscreenRegions, timeMap),
+		[cameraFullscreenRegions, timeMap],
+	);
+	const editSpeedRegions = useMemo(
+		() => toEditSpanRegions(speedRegions, timeMap),
+		[speedRegions, timeMap],
+	);
+	const editAnnotationRegions = useMemo(
+		() => toEditSpanRegions(annotationOnlyRegions, timeMap),
+		[annotationOnlyRegions, timeMap],
+	);
+	const editBlurRegions = useMemo(
+		() => toEditSpanRegions(blurRegions, timeMap),
+		[blurRegions, timeMap],
+	);
+
+	// Timeline callbacks arrive in edit time; translate spans back to source
+	// before they touch stored state.
+	const editSpanToSource = useCallback(
+		(span: Span): Span => ({
+			start: editToSource(timeMap, span.start),
+			end: editToSource(timeMap, span.end),
+		}),
+		[timeMap],
+	);
+	const handleZoomSpanChangeEdit = useCallback(
+		(id: string, span: Span) => handleZoomSpanChange(id, editSpanToSource(span)),
+		[handleZoomSpanChange, editSpanToSource],
+	);
+	const handleCameraFullscreenSpanChangeEdit = useCallback(
+		(id: string, span: Span) => handleCameraFullscreenSpanChange(id, editSpanToSource(span)),
+		[handleCameraFullscreenSpanChange, editSpanToSource],
+	);
+	const handleSpeedSpanChangeEdit = useCallback(
+		(id: string, span: Span) => handleSpeedSpanChange(id, editSpanToSource(span)),
+		[handleSpeedSpanChange, editSpanToSource],
+	);
+	const handleZoomAddedEdit = useCallback(
+		(span: Span) => handleZoomAdded(editSpanToSource(span)),
+		[handleZoomAdded, editSpanToSource],
+	);
+	const handleCameraFullscreenAddedEdit = useCallback(
+		(span: Span) => handleCameraFullscreenAdded(editSpanToSource(span)),
+		[handleCameraFullscreenAdded, editSpanToSource],
+	);
+	const handleSpeedAddedEdit = useCallback(
+		(span: Span) => handleSpeedAdded(editSpanToSource(span)),
+		[handleSpeedAdded, editSpanToSource],
+	);
+	const handleAnnotationSpanChangeEdit = useCallback(
+		(id: string, span: Span) => handleAnnotationSpanChange(id, editSpanToSource(span)),
+		[handleAnnotationSpanChange, editSpanToSource],
+	);
+	const handleAnnotationAddedEdit = useCallback(
+		(span: Span) => handleAnnotationAdded(editSpanToSource(span)),
+		[handleAnnotationAdded, editSpanToSource],
+	);
+	const handleBlurAddedEdit = useCallback(
+		(span: Span) => handleBlurAdded(editSpanToSource(span)),
+		[handleBlurAdded, editSpanToSource],
+	);
+
+	// Seek/playhead conversions between the edit-time scrubber and source video.
+	const handleSeekEdit = useCallback(
+		(editSec: number) => {
+			const video = videoPlaybackRef.current?.video;
+			if (!video) return;
+			video.currentTime = editToSource(timeMap, editSec * 1000) / 1000;
+		},
+		[timeMap],
+	);
+	const getPlaybackEditTimeMs = useCallback(
+		() => sourceToEdit(timeMap, getPlaybackTimeMs()),
+		[timeMap, getPlaybackTimeMs],
+	);
+
+	const handleSelectClip = useCallback((clip: Clip | null) => {
+		setSelectedClipStartMs(clip ? clip.srcStartMs : null);
+		if (clip) {
+			setSelectedZoomId(null);
+			setSelectedCameraFullscreenId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+		}
+	}, []);
+
+	const handleSplitAtPlayhead = useCallback(() => {
+		const sourceMs = currentTimeRef.current * 1000;
+		const total = Math.round(durationRef.current * 1000);
+		const result = computeSplit(
+			{ ...INITIAL_EDITOR_STATE, trimRegions, splitPoints },
+			sourceMs,
+			total,
+		);
+		if (!result) {
+			toast.error(t("errors.cannotSplitHere"));
+			return;
+		}
+		pushState({ splitPoints: result });
+	}, [trimRegions, splitPoints, pushState, t]);
+
+	const handleDeleteClip = useCallback(
+		(clip: Clip) => {
+			const id = `trim-${nextTrimIdRef.current++}`;
+			pushState((prev) => {
+				const result = computeClipDeletion(prev, clip.srcStartMs, clip.srcEndMs, id);
+				return result ?? {};
+			});
+			setSelectedClipStartMs(null);
+		},
+		[pushState],
 	);
 
 	const handleAnnotationContentChange = useCallback(
@@ -3252,47 +3356,46 @@ export default function VideoEditor() {
 						<Panel defaultSize={33} maxSize={54} minSize={24} className="min-h-[210px]">
 							<div className="editor-timeline-panel h-full overflow-hidden flex flex-col">
 								<TimelineEditor
-									videoDuration={duration}
-									currentTime={currentTime}
-									getPlaybackTimeMs={getPlaybackTimeMs}
-									onSeek={handleSeek}
-									zoomRegions={zoomRegions}
-									onZoomAdded={handleZoomAdded}
+									videoDuration={editDurationSec}
+									currentTime={editCurrentTimeSec}
+									getPlaybackTimeMs={getPlaybackEditTimeMs}
+									onSeek={handleSeekEdit}
+									zoomRegions={editZoomRegions}
+									onZoomAdded={handleZoomAddedEdit}
 									autoZoomEnabled={autoZoomEnabled}
 									onToggleAutoZoom={handleToggleAutoZoom}
 									autoFocusAll={autoFocusAll}
 									onToggleAutoFocusAll={handleToggleAutoFocusAll}
-									onZoomSpanChange={handleZoomSpanChange}
+									onZoomSpanChange={handleZoomSpanChangeEdit}
 									onZoomDelete={handleZoomDelete}
 									selectedZoomId={selectedZoomId}
 									onSelectZoom={handleSelectZoom}
-									cameraFullscreenRegions={cameraFullscreenRegions}
-									onCameraFullscreenAdded={handleCameraFullscreenAdded}
-									onCameraFullscreenSpanChange={handleCameraFullscreenSpanChange}
+									cameraFullscreenRegions={editCameraFullscreenRegions}
+									onCameraFullscreenAdded={handleCameraFullscreenAddedEdit}
+									onCameraFullscreenSpanChange={handleCameraFullscreenSpanChangeEdit}
 									onCameraFullscreenDelete={handleCameraFullscreenDelete}
 									selectedCameraFullscreenId={selectedCameraFullscreenId}
 									onSelectCameraFullscreen={handleSelectCameraFullscreen}
-									trimRegions={trimRegions}
-									onTrimAdded={handleTrimAdded}
-									onTrimSpanChange={handleTrimSpanChange}
-									onTrimDelete={handleTrimDelete}
-									selectedTrimId={selectedTrimId}
-									onSelectTrim={handleSelectTrim}
-									speedRegions={speedRegions}
-									onSpeedAdded={handleSpeedAdded}
-									onSpeedSpanChange={handleSpeedSpanChange}
+									clips={clips}
+									onSplit={handleSplitAtPlayhead}
+									onDeleteClip={handleDeleteClip}
+									selectedClipStartMs={selectedClipStartMs}
+									onSelectClip={handleSelectClip}
+									speedRegions={editSpeedRegions}
+									onSpeedAdded={handleSpeedAddedEdit}
+									onSpeedSpanChange={handleSpeedSpanChangeEdit}
 									onSpeedDelete={handleSpeedDelete}
 									selectedSpeedId={selectedSpeedId}
 									onSelectSpeed={handleSelectSpeed}
-									annotationRegions={annotationOnlyRegions}
-									onAnnotationAdded={handleAnnotationAdded}
-									onAnnotationSpanChange={handleAnnotationSpanChange}
+									annotationRegions={editAnnotationRegions}
+									onAnnotationAdded={handleAnnotationAddedEdit}
+									onAnnotationSpanChange={handleAnnotationSpanChangeEdit}
 									onAnnotationDelete={handleAnnotationDelete}
 									selectedAnnotationId={selectedAnnotationId}
 									onSelectAnnotation={handleSelectAnnotation}
-									blurRegions={blurRegions}
-									onBlurAdded={handleBlurAdded}
-									onBlurSpanChange={handleAnnotationSpanChange}
+									blurRegions={editBlurRegions}
+									onBlurAdded={handleBlurAddedEdit}
+									onBlurSpanChange={handleAnnotationSpanChangeEdit}
 									onBlurDelete={handleAnnotationDelete}
 									selectedBlurId={selectedBlurId}
 									onSelectBlur={handleSelectBlur}
@@ -3308,7 +3411,6 @@ export default function VideoEditor() {
 										})
 									}
 									videoUrl={videoPath ?? undefined}
-									showTrimWaveform={showTrimWaveform}
 									captionsLabel={t("autoCaptions.button")}
 									isGeneratingCaptions={isAutoCaptioning}
 									onGenerateCaptions={() => {

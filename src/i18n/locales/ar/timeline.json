@@ -6,7 +6,9 @@
 		"addAnnotation": "إضافة شرح (A)",
 		"addBlur": "إضافة تمويه (B)",
 		"addSpeed": "إضافة سرعة (S)",
-		"addCameraFullscreen": "إضافة كاميرا كاملة الشاشة (C)"
+		"addCameraFullscreen": "إضافة كاميرا كاملة الشاشة (C)",
+		"split": "تقسيم عند المؤشر (T)",
+		"deleteClip": "حذف المقطع (ripple)"
 	},
 	"hints": {
 		"pressZoom": "اضغط Z لإضافة تكبير",
