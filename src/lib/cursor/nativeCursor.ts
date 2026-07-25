@@ -566,8 +566,18 @@ function resolveThemedCursorAsset(
 		return null;
 	}
 	try {
+		// Imported packs embed their artwork, so their URL is already self-contained;
+		// bundled packs resolve a path against the install's asset root.
+		const imageDataUrl = themeAsset.assetUrl
+			? themeAsset.assetUrl
+			: themeAsset.assetPath
+				? getAssetPath(themeAsset.assetPath)
+				: null;
+		if (!imageDataUrl) {
+			return null;
+		}
 		return {
-			imageDataUrl: getAssetPath(themeAsset.assetPath),
+			imageDataUrl,
 			width: themeAsset.width,
 			height: themeAsset.height,
 			hotspotX: themeAsset.hotspotX,

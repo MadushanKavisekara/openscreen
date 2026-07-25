@@ -34,6 +34,7 @@ import {
 	transcribeMono16kToSegments,
 	trimLeadingSilenceMono16k,
 } from "@/lib/captioning";
+import { getCustomCursorPack, isCustomCursorId } from "@/lib/cursor/customCursors";
 import { hasNativeCursorRecordingData } from "@/lib/cursor/nativeCursor";
 import {
 	calculateEffectiveSourceDimensions,
@@ -83,6 +84,7 @@ import {
 	deriveNextId,
 	fromFileUrl,
 	hasProjectUnsavedChanges,
+	installProjectCursorPack,
 	normalizeProjectEditor,
 	resolveProjectMedia,
 	toFileUrl,
@@ -391,6 +393,9 @@ export default function VideoEditor() {
 			const sourcePath = projectMedia.screenVideoPath;
 			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
 			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
+			// Install any cursor pack the project carries *before* normalizing, so its
+			// theme id is recognised instead of being reset to the default.
+			const installedCursorPack = installProjectCursorPack(project);
 			const normalizedEditor = normalizeProjectEditor(project.editor);
 			const inferredDurationMs = Math.max(
 				0,
@@ -460,7 +465,16 @@ export default function VideoEditor() {
 			setGifFrameRate(normalizedEditor.gifFrameRate);
 			setGifLoop(normalizedEditor.gifLoop);
 			setGifSizePreset(normalizedEditor.gifSizePreset);
-			setCursorTheme(normalizedEditor.cursorTheme);
+			// Deduplication can install the pack under an id the project never knew about,
+			// so follow the id the library actually settled on.
+			setCursorTheme(
+				installedCursorPack && project.customCursorPack?.id === project.editor?.cursorTheme
+					? installedCursorPack.id
+					: normalizedEditor.cursorTheme,
+			);
+			if (installedCursorPack?.added) {
+				toast.info(ts("cursor.packAddedFromProject", { name: installedCursorPack.name }));
+			}
 
 			setSelectedZoomId(null);
 			setSelectedCameraFullscreenId(null);
@@ -507,7 +521,7 @@ export default function VideoEditor() {
 			);
 			return true;
 		},
-		[pushState],
+		[pushState, ts],
 	);
 
 	const currentProjectSnapshot = useMemo(() => {
@@ -705,7 +719,13 @@ export default function VideoEditor() {
 				gifSizePreset,
 				cursorTheme,
 			};
-			const projectData = createProjectData(currentProjectMedia, editorState);
+			// Embed the imported cursor pack so the project still looks right when it is
+			// opened on a machine that does not have it.
+			const projectData = createProjectData(
+				currentProjectMedia,
+				editorState,
+				isCustomCursorId(cursorTheme) ? getCustomCursorPack(cursorTheme) : null,
+			);
 
 			const fileNameBase =
 				currentProjectMedia.screenVideoPath

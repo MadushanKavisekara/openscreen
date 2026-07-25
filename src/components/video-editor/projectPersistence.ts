@@ -1,6 +1,11 @@
 import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
 import { normalizeBlurColor, normalizeBlurType } from "@/lib/blurEffects";
 import { normalizeCursorThemeId } from "@/lib/cursor/cursorThemes";
+import {
+	addCustomCursorPack,
+	type CustomCursorPack,
+	isCustomCursorId,
+} from "@/lib/cursor/customCursors";
 import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
 import type { ProjectMedia } from "@/lib/recordingSession";
 import { normalizeProjectMedia } from "@/lib/recordingSession";
@@ -101,6 +106,12 @@ export interface EditorProjectData {
 	media?: ProjectMedia;
 	editor: ProjectEditorState;
 	videoPath?: string;
+	/**
+	 * The imported cursor pack this project uses, embedded so the project renders
+	 * correctly on a machine that has never seen it. Installed into the opener's own
+	 * library on load. Absent unless `editor.cursorTheme` names an imported pack.
+	 */
+	customCursorPack?: CustomCursorPack;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -559,19 +570,59 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 export function createProjectData(
 	media: ProjectMedia,
 	editor: ProjectEditorState,
+	customCursorPack?: CustomCursorPack | null,
 ): EditorProjectData {
 	return {
 		version: PROJECT_VERSION,
 		media,
 		editor,
+		...(customCursorPack ? { customCursorPack } : {}),
 	};
 }
 
+/**
+ * Deliberately excludes the embedded cursor pack: this snapshot is stringified on every
+ * editor change to detect unsaved work, and a pack is a few hundred KB of image data.
+ * The pack's identity already rides along in `editor.cursorTheme`, since importing new
+ * artwork always mints a new id.
+ */
 export function createProjectSnapshot(
 	media: ProjectMedia,
 	editor: Partial<ProjectEditorState>,
 ): string {
 	return JSON.stringify(createProjectData(media, normalizeProjectEditor(editor)));
+}
+
+export interface InstalledProjectCursorPack {
+	/** Id to select in the editor — the local pack's id, which may differ after dedupe. */
+	id: string;
+	name: string;
+	/** False when this artwork was already in the library. */
+	added: boolean;
+}
+
+/**
+ * Installs a project's embedded cursor pack into this machine's library.
+ *
+ * Must run before the editor state is normalized, because an imported theme id is only
+ * considered valid once its pack is present. Deduplication means reopening the same
+ * shared project repeatedly does not stack up copies, and it can return an id different
+ * from the embedded one when the same artwork is already installed under another id.
+ */
+export function installProjectCursorPack(
+	data: Pick<EditorProjectData, "customCursorPack">,
+): InstalledProjectCursorPack | null {
+	const pack = data.customCursorPack;
+	if (!pack || !isCustomCursorId(pack.id)) {
+		return null;
+	}
+
+	const result = addCustomCursorPack(pack);
+	if (!result.ok) {
+		return null;
+	}
+
+	return { id: result.pack.id, name: result.pack.name, added: !result.alreadyPresent };
 }
 
 export function hasProjectUnsavedChanges(

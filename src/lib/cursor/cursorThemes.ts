@@ -1,4 +1,5 @@
 import type { NativeCursorType } from "@/native/contracts";
+import { getCustomCursorPack, getCustomCursorPacks, isCustomCursorId } from "./customCursors";
 
 /**
  * A single themed cursor image override for one {@link NativeCursorType}.
@@ -9,8 +10,16 @@ import type { NativeCursorType } from "@/native/contracts";
  * and is downscaled at draw time for crisper retina output.
  */
 export interface CursorThemeAsset {
-	/** Path relative to the public asset root, e.g. "cursors/hello-kitty-watermelon/arrow.png". */
-	assetPath: string;
+	/**
+	 * Path relative to the public asset root, e.g. "cursors/hello-kitty-watermelon/arrow.png".
+	 * Bundled packs only; user-imported packs carry {@link assetUrl} instead.
+	 */
+	assetPath?: string;
+	/**
+	 * A self-contained image URL (a data URL) for user-imported packs, so the artwork
+	 * travels with the pack instead of depending on a file on disk.
+	 */
+	assetUrl?: string;
 	width: number;
 	height: number;
 	hotspotX: number;
@@ -398,16 +407,36 @@ export const CURSOR_THEMES: readonly CursorTheme[] = [
 	},
 ];
 
-/** All selectable theme ids, including the built-in default. */
+/** Ids of the bundled themes, plus the built-in default. */
 export const CURSOR_THEME_IDS: ReadonlySet<string> = new Set([
 	DEFAULT_CURSOR_THEME_ID,
 	...CURSOR_THEMES.map((theme) => theme.id),
 ]);
 
+/**
+ * Every selectable theme: the bundled packs followed by the user's imported ones.
+ *
+ * Imported packs are read from a synchronous in-memory cache, so this stays cheap enough
+ * for the settings UI to call on each render and carries no load-order hazard — a project
+ * restored at startup can resolve a custom id immediately.
+ */
+export function getAllCursorThemes(): CursorTheme[] {
+	const custom: CursorTheme[] = getCustomCursorPacks().map((pack) => ({
+		id: pack.id,
+		name: pack.name,
+		assets: pack.assets,
+	}));
+	return [...CURSOR_THEMES, ...custom];
+}
+
 /** Returns the theme for `id`, or null for the default / unknown ids. */
 export function getCursorTheme(id: string | null | undefined): CursorTheme | null {
 	if (!id || id === DEFAULT_CURSOR_THEME_ID) {
 		return null;
+	}
+	if (isCustomCursorId(id)) {
+		const pack = getCustomCursorPack(id);
+		return pack ? { id: pack.id, name: pack.name, assets: pack.assets } : null;
 	}
 	return CURSOR_THEMES.find((theme) => theme.id === id) ?? null;
 }
@@ -415,7 +444,19 @@ export function getCursorTheme(id: string | null | undefined): CursorTheme | nul
 /**
  * Normalizes a persisted/incoming theme id to a known value, falling back to the
  * default for anything unrecognized.
+ *
+ * Imported packs are validated against the live library rather than a fixed list, so a
+ * project that names one keeps it — and falls back gracefully if that pack is gone.
  */
 export function normalizeCursorThemeId(id: unknown): string {
-	return typeof id === "string" && CURSOR_THEME_IDS.has(id) ? id : DEFAULT_CURSOR_THEME_ID;
+	if (typeof id !== "string") {
+		return DEFAULT_CURSOR_THEME_ID;
+	}
+	if (CURSOR_THEME_IDS.has(id)) {
+		return id;
+	}
+	if (isCustomCursorId(id) && getCustomCursorPack(id)) {
+		return id;
+	}
+	return DEFAULT_CURSOR_THEME_ID;
 }

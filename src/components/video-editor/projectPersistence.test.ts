@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+	addCustomCursorPack,
+	type CustomCursorPack,
+	getCustomCursorPacks,
+	resetCustomCursorCacheForTests,
+} from "@/lib/cursor/customCursors";
 import {
 	createProjectData,
 	createProjectSnapshot,
 	hasProjectUnsavedChanges,
+	installProjectCursorPack,
 	normalizeProjectEditor,
 	PROJECT_VERSION,
 	resolveProjectMedia,
@@ -262,5 +269,75 @@ describe("wallpaper legacy normalization", () => {
 			wallpaper: "file:///opt/Openscreen/resources/wallpapers/wallpaper99.jpg",
 		});
 		expect(normalized.wallpaper).toBe("/wallpapers/wallpaper1.jpg");
+	});
+});
+
+describe("sharing a project that uses an imported cursor pack", () => {
+	const pack: CustomCursorPack = {
+		id: "custom:11111111-1111-4111-8111-111111111111",
+		name: "Nyan Cat",
+		fingerprint: "abc123",
+		createdAt: 1,
+		assets: {
+			arrow: {
+				assetUrl: "data:image/png;base64,AAAA",
+				width: 32,
+				height: 32,
+				hotspotX: 1,
+				hotspotY: 2,
+			},
+		},
+	};
+
+	const media = { screenVideoPath: "/tmp/screen.webm" };
+
+	beforeEach(() => {
+		localStorage.clear();
+		resetCustomCursorCacheForTests();
+	});
+
+	it("embeds the pack in the saved project", () => {
+		const data = createProjectData(media, normalizeProjectEditor({ cursorTheme: pack.id }), pack);
+
+		expect(data.customCursorPack?.name).toBe("Nyan Cat");
+	});
+
+	it("keeps the pack out of the unsaved-changes snapshot", () => {
+		// The snapshot is stringified on every edit, so a few hundred KB of embedded
+		// artwork has no business being in it.
+		expect(createProjectSnapshot(media, { cursorTheme: pack.id })).not.toContain("base64");
+	});
+
+	it("installs the pack into the opener's library", () => {
+		const installed = installProjectCursorPack({ customCursorPack: pack });
+
+		expect(installed).toEqual({ id: pack.id, name: "Nyan Cat", added: true });
+		expect(getCustomCursorPacks()).toHaveLength(1);
+		// Only now does the project's theme id survive normalization.
+		expect(normalizeProjectEditor({ cursorTheme: pack.id }).cursorTheme).toBe(pack.id);
+	});
+
+	it("does not stack up copies when the same project is opened again", () => {
+		installProjectCursorPack({ customCursorPack: pack });
+		const second = installProjectCursorPack({ customCursorPack: pack });
+
+		expect(second).toEqual({ id: pack.id, name: "Nyan Cat", added: false });
+		expect(getCustomCursorPacks()).toHaveLength(1);
+	});
+
+	it("reports the local id when the same artwork is already installed under another id", () => {
+		// The opener imported this pack themselves before receiving the project.
+		addCustomCursorPack({ ...pack, id: "custom:local", name: "Mine" });
+
+		const installed = installProjectCursorPack({ customCursorPack: pack });
+
+		expect(installed?.id).toBe("custom:local");
+		expect(installed?.added).toBe(false);
+		expect(getCustomCursorPacks()).toHaveLength(1);
+	});
+
+	it("ignores a project with no embedded pack", () => {
+		expect(installProjectCursorPack({})).toBeNull();
+		expect(createProjectData(media, normalizeProjectEditor({})).customCursorPack).toBeUndefined();
 	});
 });

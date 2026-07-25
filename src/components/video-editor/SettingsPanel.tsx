@@ -12,6 +12,7 @@ import {
 	Lock,
 	MousePointerClick,
 	Palette,
+	Plus,
 	SlidersHorizontal,
 	Sparkles,
 	Star,
@@ -20,7 +21,14 @@ import {
 	Upload,
 	X,
 } from "lucide-react";
-import { type ComponentType, useCallback, useMemo, useRef, useState } from "react";
+import {
+	type ComponentType,
+	useCallback,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 import defaultCursorPreviewUrl from "@/assets/cursors/Cursor=Default.svg";
 import {
@@ -44,7 +52,13 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { useScopedT } from "@/contexts/I18nContext";
 import { getAssetPath } from "@/lib/assetPath";
 import { WEBCAM_LAYOUT_PRESETS } from "@/lib/compositeLayout";
+import { CURSOR_IMPORT_ACCEPT } from "@/lib/cursor/cursorImport";
 import { CURSOR_THEMES, DEFAULT_CURSOR_THEME_ID } from "@/lib/cursor/cursorThemes";
+import {
+	getCustomCursorPacks,
+	removeCustomCursorPack,
+	subscribeToCustomCursorPacks,
+} from "@/lib/cursor/customCursors";
 import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
 import {
 	calculateEffectiveSourceDimensions,
@@ -62,6 +76,7 @@ import { AnnotationSettingsPanel } from "./AnnotationSettingsPanel";
 import { BlurSettingsPanel } from "./BlurSettingsPanel";
 import { BACKGROUND_IMAGE_ACCEPT, isSupportedBackgroundImageType } from "./backgroundImageUpload";
 import { CropControl } from "./CropControl";
+import { CursorImportDialog } from "./CursorImportDialog";
 import { parseCustomPlaybackSpeedInput } from "./customPlaybackSpeed";
 import {
 	DEFAULT_CURSOR_SETTINGS,
@@ -497,12 +512,18 @@ export function SettingsPanel({
 	const wallpaperPreviewUrls = useMemo(() => WALLPAPER_PATHS.map(resolveImageWallpaperUrl), []);
 	// Built-in "Default" plus each bundled theme. Thumbnails use the theme's arrow asset;
 	// the persisted value is the theme id.
+	// Imported packs re-render the swatch row as soon as the library changes.
+	const customCursorPacks = useSyncExternalStore(
+		subscribeToCustomCursorPacks,
+		getCustomCursorPacks,
+	);
 	const cursorThemeOptions = useMemo(
 		() => [
 			{
 				id: DEFAULT_CURSOR_THEME_ID,
 				name: t("cursor.themeDefault"),
 				previewUrl: defaultCursorPreviewUrl,
+				isCustom: false,
 			},
 			...CURSOR_THEMES.map((theme) => {
 				const previewPath = (theme.assets.arrow ?? theme.assets.pointer)?.assetPath;
@@ -510,13 +531,47 @@ export function SettingsPanel({
 					id: theme.id,
 					name: theme.name,
 					previewUrl: previewPath ? getAssetPath(previewPath) : defaultCursorPreviewUrl,
+					isCustom: false,
+				};
+			}),
+			...customCursorPacks.map((pack) => {
+				// Imported artwork is embedded, so its preview needs no asset-root lookup.
+				const asset = pack.assets.arrow ?? pack.assets.pointer ?? Object.values(pack.assets)[0];
+				return {
+					id: pack.id,
+					name: pack.name,
+					previewUrl: asset?.assetUrl ?? defaultCursorPreviewUrl,
+					isCustom: true,
 				};
 			}),
 		],
-		[t],
+		[t, customCursorPacks],
 	);
 	const [customImages, setCustomImages] = useState<string[]>([]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const cursorFileInputRef = useRef<HTMLInputElement>(null);
+	const [pendingCursorFiles, setPendingCursorFiles] = useState<File[] | null>(null);
+	const [cursorImportOpen, setCursorImportOpen] = useState(false);
+
+	const handleCursorFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const selected = Array.from(event.target.files ?? []);
+		// Reset first so picking the same file twice still fires a change event.
+		event.target.value = "";
+		if (selected.length === 0) {
+			return;
+		}
+		setPendingCursorFiles(selected);
+		setCursorImportOpen(true);
+	};
+
+	const handleRemoveCursorPack = (packId: string, event: React.MouseEvent) => {
+		event.stopPropagation();
+		removeCustomCursorPack(packId);
+		// Selecting a pack that no longer exists would leave the editor on missing art.
+		if (cursorTheme === packId) {
+			onCursorThemeChange?.(DEFAULT_CURSOR_THEME_ID);
+		}
+	};
 	const colorPalette = [
 		"#FF0000",
 		"#FFD700",
@@ -835,6 +890,17 @@ export function SettingsPanel({
 
 	return (
 		<div className="editor-inspector-shell flex min-w-0 flex-col h-full overflow-hidden">
+			<CursorImportDialog
+				files={pendingCursorFiles}
+				open={cursorImportOpen}
+				onOpenChange={(open) => {
+					setCursorImportOpen(open);
+					if (!open) {
+						setPendingCursorFiles(null);
+					}
+				}}
+				onImported={(pack) => onCursorThemeChange?.(pack.id)}
+			/>
 			<div className="flex min-h-0 flex-1">
 				<div className="settings-mode-rail flex w-11 shrink-0 flex-col items-center gap-1 border-r border-white/[0.07] bg-black/20 px-1 py-2.5">
 					{panelModes.map((mode) => {
@@ -1600,29 +1666,61 @@ export function SettingsPanel({
 																	{cursorThemeOptions.map((option) => {
 																		const isSelected = cursorTheme === option.id;
 																		return (
-																			<button
-																				type="button"
-																				key={option.id}
-																				title={option.name}
-																				aria-label={option.name}
-																				aria-pressed={isSelected}
-																				onClick={() => onCursorThemeChange?.(option.id)}
-																				className={cn(
-																					"flex items-center justify-center w-8 h-8 rounded-lg border overflow-hidden transition-all duration-150 shadow-sm bg-white/5",
-																					isSelected
-																						? "border-[#34B27B] ring-1 ring-[#34B27B]/30"
-																						: "border-white/10 hover:border-[#34B27B]/40 opacity-80 hover:opacity-100",
+																			<div key={option.id} className="relative group">
+																				<button
+																					type="button"
+																					title={option.name}
+																					aria-label={option.name}
+																					aria-pressed={isSelected}
+																					onClick={() => onCursorThemeChange?.(option.id)}
+																					className={cn(
+																						"flex items-center justify-center w-8 h-8 rounded-lg border overflow-hidden transition-all duration-150 shadow-sm bg-white/5",
+																						isSelected
+																							? "border-[#34B27B] ring-1 ring-[#34B27B]/30"
+																							: "border-white/10 hover:border-[#34B27B]/40 opacity-80 hover:opacity-100",
+																					)}
+																				>
+																					<img
+																						src={option.previewUrl}
+																						alt=""
+																						className="w-5 h-5 object-contain"
+																						draggable={false}
+																					/>
+																				</button>
+																				{option.isCustom && (
+																					<button
+																						type="button"
+																						aria-label={t("cursor.import.remove", {
+																							name: option.name,
+																						})}
+																						onClick={(event) =>
+																							handleRemoveCursorPack(option.id, event)
+																						}
+																						className="absolute -top-1 -right-1 w-3 h-3 bg-red-500/90 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+																					>
+																						<X className="w-2 h-2 text-white" />
+																					</button>
 																				)}
-																			>
-																				<img
-																					src={option.previewUrl}
-																					alt=""
-																					className="w-5 h-5 object-contain"
-																					draggable={false}
-																				/>
-																			</button>
+																			</div>
 																		);
 																	})}
+																	<input
+																		type="file"
+																		ref={cursorFileInputRef}
+																		onChange={handleCursorFilesSelected}
+																		accept={CURSOR_IMPORT_ACCEPT}
+																		multiple
+																		className="hidden"
+																	/>
+																	<button
+																		type="button"
+																		title={t("cursor.import.uploadTooltip")}
+																		aria-label={t("cursor.import.upload")}
+																		onClick={() => cursorFileInputRef.current?.click()}
+																		className="flex items-center justify-center w-8 h-8 rounded-lg border border-dashed border-white/20 text-slate-400 hover:border-[#34B27B]/60 hover:text-[#34B27B] transition-all duration-150 bg-white/5"
+																	>
+																		<Plus className="w-3.5 h-3.5" />
+																	</button>
 																</div>
 															</div>
 														)}
