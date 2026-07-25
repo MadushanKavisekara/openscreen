@@ -267,7 +267,7 @@ export function CursorImportDialog({
 								<Button
 									onClick={handleImport}
 									disabled={saving || assignedCount === 0}
-									className="bg-[#34B27B] hover:bg-[#2b9668] text-white"
+									className="bg-brand hover:bg-[#2E6FE6] text-white"
 								>
 									{t("cursor.import.confirm")}
 								</Button>

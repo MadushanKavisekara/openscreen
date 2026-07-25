@@ -50,12 +50,6 @@ export function UnsavedChangesDialog({
 			<DialogContent className="bg-[#09090b] border-white/10 rounded-2xl max-w-sm p-6 gap-0">
 				<DialogHeader className="mb-5">
 					<div className="flex items-center gap-3">
-						<img
-							src="./openscreen.png"
-							alt=""
-							aria-hidden="true"
-							className="w-9 h-9 rounded-xl flex-shrink-0"
-						/>
 						<DialogTitle className="text-base font-semibold text-slate-200 leading-tight">
 							{td("unsavedChanges.title")}
 						</DialogTitle>
@@ -69,7 +63,7 @@ export function UnsavedChangesDialog({
 					<button
 						type="button"
 						onClick={onSaveAndClose}
-						className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#34B27B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-brand hover:bg-[#2E6FE6] active:bg-[#2661CC] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
 					>
 						<Save className="w-4 h-4" />
 						{saveLabel}

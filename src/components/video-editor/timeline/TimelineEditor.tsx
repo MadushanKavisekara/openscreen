@@ -35,9 +35,13 @@ import { findFreeGapAt } from "../regionPlacement";
 import type { Clip } from "../timeMap";
 import type { AnnotationRegion, CameraFullscreenRegion, SpeedRegion, ZoomRegion } from "../types";
 import Item from "./Item";
+import glassStyles from "./ItemGlass.module.css";
 import KeyframeMarkers from "./KeyframeMarkers";
 import Row from "./Row";
 import TimelineWrapper from "./TimelineWrapper";
+
+/** End-cap colour for the recording clip — matches the default variant in Item.tsx. */
+const CLIP_END_CAP_COLOR = "#FACC15";
 
 const ZOOM_ROW_ID = "row-zoom";
 const CAMERA_ROW_ID = "row-camera-fullscreen";
@@ -589,7 +593,7 @@ function TimelineAxis({
 							<span
 								className={cn(
 									"text-[10px] font-medium tabular-nums tracking-tight",
-									marker.time === currentTimeMs ? "text-[#34B27B]" : "text-slate-500",
+									marker.time === currentTimeMs ? "text-brand" : "text-slate-500",
 								)}
 							>
 								{marker.label}
@@ -627,8 +631,6 @@ function ClipsTrack({
 	valueToPixels: (value: number) => number;
 	deleteLabel: string;
 }) {
-	// A single uncut clip is just the whole video — no seams worth showing.
-	const showSeams = clips.length > 1;
 	// Stop pointer/click events from reaching the timeline's scrub + seek handlers, so
 	// interacting with a clip selects it instead of moving the playhead. The playhead is
 	// still driven from the axis/ruler above. A bare-area click deselects.
@@ -636,7 +638,7 @@ function ClipsTrack({
 	return (
 		<div
 			className="relative border-b border-white/[0.055] bg-[#101116]"
-			style={{ minHeight: 36 }}
+			style={{ minHeight: 44 }}
 			onPointerDown={stop}
 			onClick={(e) => {
 				stop(e);
@@ -658,31 +660,59 @@ function ClipsTrack({
 								e.stopPropagation();
 								onSelectClip?.(isSelected ? null : clip);
 							}}
-							className={cn(
-								"absolute top-1 bottom-1 rounded-[3px] transition-colors overflow-hidden group/clip cursor-pointer",
-								showSeams ? "border-l border-r border-black/40" : "",
-								isSelected
-									? "bg-[#34B27B]/25 ring-1 ring-[#34B27B] ring-inset"
-									: "bg-[#2a3038] hover:bg-[#333b44]",
-							)}
+							className="absolute top-1 bottom-1 group/clip cursor-pointer"
 							style={{ left, width: Math.max(width, 2) }}
 						>
-							<span className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,#ffffff08_6px,#ffffff08_12px)] pointer-events-none" />
-							{isSelected && onDeleteClip && (
-								<span
-									role="button"
-									tabIndex={-1}
-									onPointerDown={stop}
-									onClick={(e) => {
-										e.stopPropagation();
-										onDeleteClip(clip);
-									}}
-									className="absolute right-1 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded bg-black/40 text-white/80 hover:bg-[#ef4444] hover:text-white"
-									title={deleteLabel}
-								>
-									<Trash2 className="h-3 w-3" />
-								</span>
-							)}
+							{/*
+								The glass styling sits on an inner element rather than the button itself:
+								`.glassYellow` sets `position: relative`, which would override the absolute
+								positioning this wrapper needs to place the clip on the track. Same split
+								Item.tsx uses for the effect items.
+							*/}
+							<div
+								className={cn(
+									glassStyles.glassYellow,
+									"h-full w-full overflow-hidden",
+									isSelected && glassStyles.selected,
+								)}
+								// The end caps already delineate both ends, so `.glassYellow`'s 1px border
+								// only added a hard line at the clip's leading/trailing edge. Kept
+								// transparent rather than removed so the box model (and the selected
+								// state's ring) stays identical. Scoped here — the shared class is still
+								// bordered for the annotation/blur items that use it.
+								style={{ margin: 0, borderColor: "transparent" }}
+							>
+								{/*
+									End caps matching the effect items (see Item.tsx). Decorative here —
+									the clip row has no resize handles — so they keep the stylesheet's
+									`pointer-events: none`. Back-to-back caps also mark the boundary
+									between adjacent clips, which the old seam borders used to do.
+								*/}
+								<div
+									className={cn(glassStyles.zoomEndCap, glassStyles.left)}
+									style={{ width: 8, opacity: 0.9, background: CLIP_END_CAP_COLOR }}
+								/>
+								<div
+									className={cn(glassStyles.zoomEndCap, glassStyles.right)}
+									style={{ width: 8, opacity: 0.9, background: CLIP_END_CAP_COLOR }}
+								/>
+								<span className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,#ffffff08_6px,#ffffff08_12px)] pointer-events-none" />
+								{isSelected && onDeleteClip && (
+									<span
+										role="button"
+										tabIndex={-1}
+										onPointerDown={stop}
+										onClick={(e) => {
+											e.stopPropagation();
+											onDeleteClip(clip);
+										}}
+										className="absolute right-1 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded bg-black/40 text-white/80 hover:bg-[#ef4444] hover:text-white"
+										title={deleteLabel}
+									>
+										<Trash2 className="h-3 w-3" />
+									</span>
+								)}
+							</div>
 						</button>
 					);
 				})}
@@ -1665,7 +1695,7 @@ export default function TimelineEditor({
 						onClick={handleAddZoom}
 						variant="ghost"
 						size="icon"
-						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#34B27B] hover:bg-[#34B27B]/10 transition-all"
+						className="h-7 w-7 rounded-lg text-slate-400 hover:text-brand hover:bg-brand/10 transition-all"
 						title={t("buttons.addZoom")}
 					>
 						<ZoomIn className="w-4 h-4" />
@@ -1685,8 +1715,8 @@ export default function TimelineEditor({
 						size="icon"
 						aria-pressed={autoZoomEnabled}
 						className={cn(
-							"h-7 w-7 rounded-lg transition-all hover:bg-[#34B27B]/10 hover:text-[#34B27B]",
-							autoZoomEnabled ? "bg-[#34B27B]/15 text-[#34B27B]" : "text-slate-400",
+							"h-7 w-7 rounded-lg transition-all hover:bg-brand/10 hover:text-brand",
+							autoZoomEnabled ? "bg-brand/15 text-brand" : "text-slate-400",
 						)}
 						title={autoZoomEnabled ? t("buttons.autoZoomOn") : t("buttons.autoZoomOff")}
 					>
@@ -1698,8 +1728,8 @@ export default function TimelineEditor({
 						size="icon"
 						aria-pressed={autoFocusAll}
 						className={cn(
-							"h-7 w-7 rounded-lg transition-all hover:bg-[#34B27B]/10 hover:text-[#34B27B]",
-							autoFocusAll ? "bg-[#34B27B]/15 text-[#34B27B]" : "text-slate-400",
+							"h-7 w-7 rounded-lg transition-all hover:bg-brand/10 hover:text-brand",
+							autoFocusAll ? "bg-brand/15 text-brand" : "text-slate-400",
 						)}
 						title={autoFocusAll ? t("buttons.autoFocusAllOn") : t("buttons.autoFocusAllOff")}
 					>
@@ -1709,7 +1739,7 @@ export default function TimelineEditor({
 						onClick={() => onSplit?.()}
 						variant="ghost"
 						size="icon"
-						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#34B27B] hover:bg-[#34B27B]/10 transition-all"
+						className="h-7 w-7 rounded-lg text-slate-400 hover:text-brand hover:bg-brand/10 transition-all"
 						title={t("buttons.split")}
 					>
 						<Scissors className="w-4 h-4" />
@@ -1728,7 +1758,7 @@ export default function TimelineEditor({
 						onClick={handleAddAnnotation}
 						variant="ghost"
 						size="icon"
-						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#B4A046] hover:bg-[#B4A046]/10 transition-all"
+						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#FACC15] hover:bg-[#FACC15]/10 transition-all"
 						title={t("buttons.addAnnotation")}
 					>
 						<MessageSquare className="w-4 h-4" />
@@ -1796,7 +1826,7 @@ export default function TimelineEditor({
 									className="text-slate-300 hover:text-white hover:bg-white/10 cursor-pointer flex items-center justify-between gap-3"
 								>
 									<span>{getAspectRatioLabel(ratio)}</span>
-									{aspectRatio === ratio && <Check className="w-3 h-3 text-[#34B27B]" />}
+									{aspectRatio === ratio && <Check className="w-3 h-3 text-brand" />}
 								</DropdownMenuItem>
 							))}
 						</DropdownMenuContent>
@@ -1805,13 +1835,13 @@ export default function TimelineEditor({
 				<div className="flex-1" />
 				<div className="hidden md:flex items-center gap-3 text-[10px] text-slate-500 font-medium">
 					<span className="flex items-center gap-1.5">
-						<kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[#34B27B] font-sans">
+						<kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-brand font-sans">
 							{scrollLabels.pan}
 						</kbd>
 						<span>{t("labels.pan")}</span>
 					</span>
 					<span className="flex items-center gap-1.5">
-						<kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[#34B27B] font-sans">
+						<kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-brand font-sans">
 							{scrollLabels.zoom}
 						</kbd>
 						<span>{t("labels.zoom")}</span>

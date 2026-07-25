@@ -18,7 +18,7 @@ export default function Row({ id, children, hint, isEmpty, background }: RowProp
 	return (
 		<div
 			className="border-b border-white/[0.055] bg-[#101116] relative overflow-hidden"
-			style={{ ...rowWrapperStyle, minHeight: 36 }}
+			style={{ ...rowWrapperStyle, minHeight: 44 }}
 		>
 			{background}
 			{isEmpty && hint && (

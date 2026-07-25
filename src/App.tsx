@@ -73,7 +73,7 @@ export default function App() {
 							fallback={
 								<div className="flex flex-col items-center justify-center gap-3 h-screen bg-[#09090b]">
 									<svg
-										className="animate-spin text-[#34B27B]"
+										className="animate-spin text-brand"
 										xmlns="http://www.w3.org/2000/svg"
 										fill="none"
 										viewBox="0 0 24 24"

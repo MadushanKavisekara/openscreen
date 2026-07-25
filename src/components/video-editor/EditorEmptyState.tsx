@@ -113,9 +113,9 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 		>
 			{/* Drop overlay */}
 			{isDraggingOver && (
-				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#34B27B] bg-[#34B27B]/10">
-					<Upload className="mb-3 h-10 w-10 text-[#34B27B]" />
-					<p className="text-base font-semibold text-[#34B27B]">{te("emptyState.dropOverlay")}</p>
+				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-brand bg-brand/10">
+					<Upload className="mb-3 h-10 w-10 text-brand" />
+					<p className="text-base font-semibold text-brand">{te("emptyState.dropOverlay")}</p>
 				</div>
 			)}
 
@@ -124,12 +124,6 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 				<DialogContent className="bg-[#09090b] border-white/10 rounded-2xl max-w-sm p-6 gap-0">
 					<DialogHeader className="mb-4">
 						<div className="flex items-center gap-3">
-							<img
-								src="./openscreen.png"
-								alt=""
-								aria-hidden="true"
-								className="w-9 h-9 rounded-xl flex-shrink-0"
-							/>
 							<DialogTitle className="text-base font-semibold text-slate-200 leading-tight">
 								{lastDropErrorRef.current === "unsupported-format"
 									? te("emptyState.dropErrors.unsupportedFormatTitle")
@@ -161,14 +155,6 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			</Dialog>
 
 			<div className="relative flex flex-col items-center gap-8 px-6 text-center">
-				{/* Logo */}
-				<img
-					src="./openscreen.png"
-					alt=""
-					aria-hidden="true"
-					className="h-16 w-16 rounded-2xl opacity-90"
-				/>
-
 				<div className="flex flex-col gap-2">
 					<h2 className="text-xl font-semibold text-slate-200">{te("emptyState.title")}</h2>
 					<p className="max-w-sm text-sm leading-relaxed text-slate-500">
@@ -181,7 +167,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 					<button
 						type="button"
 						onClick={handleImportVideo}
-						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#34B27B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-brand hover:bg-[#2E6FE6] active:bg-[#2661CC] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
 					>
 						<Film className="h-4 w-4" />
 						{te("emptyState.importVideoButton")}

@@ -1,5 +1,5 @@
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { MdCheck } from "react-icons/md";
 import { useScopedT } from "@/contexts/I18nContext";
 import { Button } from "../ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
@@ -75,7 +75,7 @@ export function SourceSelector() {
 				style={{ minHeight: "100vh" }}
 			>
 				<div className="text-center">
-					<div className="animate-spin duration-500 rounded-[50%] h-6 w-6 border-2 border-b-transparent border-[#34B27B] mx-auto mb-2" />
+					<div className="animate-spin duration-500 rounded-[50%] h-6 w-6 border-2 border-b-transparent border-brand mx-auto mb-2" />
 					<p className="text-xs text-zinc-400">{t("sourceSelector.loading")}</p>
 				</div>
 			</div>
@@ -97,7 +97,7 @@ export function SourceSelector() {
 					</p>
 					<Button
 						onClick={() => void fetchSources()}
-						className="mt-4 h-8 rounded-lg bg-[#34B27B] px-5 text-[11px] font-semibold text-white transition-transform duration-150 hover:bg-[#34B27B]/85 active:scale-95"
+						className="mt-4 h-8 rounded-lg bg-brand px-5 text-[11px] font-semibold text-white transition-transform duration-150 hover:bg-brand/85 active:scale-95"
 					>
 						{tc("actions.reload")}
 					</Button>
@@ -126,7 +126,7 @@ export function SourceSelector() {
 					{isSelected && (
 						<div className="absolute right-1.5 top-1.5">
 							<div className={styles.checkBadge}>
-								<MdCheck size={11} className="text-white" />
+								<Check size={11} strokeWidth={3} className="text-white" />
 							</div>
 						</div>
 					)}
@@ -193,7 +193,7 @@ export function SourceSelector() {
 					data-testid="source-selector-share-button"
 					onClick={handleShare}
 					disabled={!selectedSource}
-					className="h-8 rounded-lg bg-[#34B27B] px-5 text-[11px] font-semibold text-white transition-transform duration-150 hover:bg-[#34B27B]/85 active:scale-95 disabled:bg-zinc-700 disabled:opacity-30"
+					className="h-8 rounded-lg bg-brand px-5 text-[11px] font-semibold text-white transition-transform duration-150 hover:bg-brand/85 active:scale-95 disabled:bg-zinc-700 disabled:opacity-30"
 				>
 					{tc("actions.share")}
 				</Button>

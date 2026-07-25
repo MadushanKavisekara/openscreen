@@ -8,6 +8,7 @@ import {
 	Menu,
 	nativeImage,
 	session,
+	shell,
 	systemPreferences,
 	Tray,
 } from "electron";
@@ -18,7 +19,13 @@ import {
 	registerOpenAppShortcut,
 	unregisterAllGlobalShortcuts,
 } from "./globalShortcut";
-import { mainT, setMainLocale } from "./i18n";
+import {
+	getMainLocale,
+	getMainLocaleName,
+	MAIN_SUPPORTED_LOCALES,
+	mainT,
+	setMainLocale,
+} from "./i18n";
 import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
 import { acquireStableInstanceLock } from "./singleInstanceLock";
 import {
@@ -139,8 +146,33 @@ function isEditorWindow(window: BrowserWindow) {
 	return window.webContents.getURL().includes("windowType=editor");
 }
 
+/**
+ * Applies a locale chosen from the native Language menu: updates the main-process
+ * copy (menu + tray labels), rebuilds the menu so the radio state and labels follow,
+ * and tells every open renderer to switch. Renderers persist it themselves.
+ */
+function applyLocaleFromMenu(locale: string) {
+	setMainLocale(locale);
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) {
+			window.webContents.send("menu-set-locale", locale);
+		}
+	}
+	setupApplicationMenu();
+	updateTrayMenu();
+}
+
+const GITHUB_REPO_URL = "https://github.com/EtienneLescot/openscreen";
+const GITHUB_NEW_ISSUE_URL = `${GITHUB_REPO_URL}/issues/new/choose`;
+
 function sendEditorMenuAction(
-	channel: "menu-load-project" | "menu-save-project" | "menu-save-project-as" | "menu-new-project",
+	channel:
+		| "menu-load-project"
+		| "menu-save-project"
+		| "menu-save-project-as"
+		| "menu-new-project"
+		| "menu-new-recording"
+		| "menu-save-diagnostics",
 ) {
 	let targetWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
 
@@ -203,6 +235,10 @@ function setupApplicationMenu() {
 					label: mainT("dialogs", "unsavedChanges.newProject") || "New Project",
 					accelerator: "CmdOrCtrl+N",
 					click: () => sendEditorMenuAction("menu-new-project"),
+				},
+				{
+					label: mainT("editor", "newRecording.title") || "New Recording",
+					click: () => sendEditorMenuAction("menu-new-recording"),
 				},
 				{ type: "separator" as const },
 				{
@@ -282,6 +318,16 @@ function setupApplicationMenu() {
 			],
 		},
 		{
+			// Locale switching lives in the OS menu bar rather than in-app chrome.
+			label: mainT("launch", "language") || "Language",
+			submenu: MAIN_SUPPORTED_LOCALES.map((locale) => ({
+				label: getMainLocaleName(locale),
+				type: "radio" as const,
+				checked: locale === getMainLocale(),
+				click: () => applyLocaleFromMenu(locale),
+			})),
+		},
+		{
 			label: mainT("common", "actions.window") || "Window",
 			submenu: isMac
 				? [
@@ -303,6 +349,30 @@ function setupApplicationMenu() {
 							label: mainT("common", "actions.close") || "Close",
 						},
 					],
+		},
+		{
+			// Support links moved out of the editor's settings panel into the OS menu bar.
+			role: "help",
+			label: mainT("common", "actions.help") || "Help",
+			submenu: [
+				{
+					label: mainT("settings", "support.reportBug") || "Report Bug",
+					click: () => {
+						void shell.openExternal(GITHUB_NEW_ISSUE_URL);
+					},
+				},
+				{
+					label: mainT("settings", "support.saveDiagnostics") || "Save Diagnostics",
+					click: () => sendEditorMenuAction("menu-save-diagnostics"),
+				},
+				{ type: "separator" },
+				{
+					label: mainT("settings", "support.starOnGithub") || "Star on GitHub",
+					click: () => {
+						void shell.openExternal(GITHUB_REPO_URL);
+					},
+				},
+			],
 		},
 	);
 
