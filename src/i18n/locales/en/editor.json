@@ -9,6 +9,7 @@
 	"loadingEditor": "Loading editor...",
 	"errors": {
 		"noVideoLoaded": "No video loaded",
+		"cannotSplitHere": "Can't split here",
 		"videoNotReady": "Video not ready",
 		"unableToDetermineSourcePath": "Unable to determine source video path",
 		"failedToSaveGif": "Failed to save GIF",

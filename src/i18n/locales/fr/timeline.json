@@ -6,7 +6,9 @@
 		"addAnnotation": "Ajouter une annotation (A)",
 		"addSpeed": "Ajouter une vitesse (S)",
 		"addBlur": "Ajouter un flou (B)",
-		"addCameraFullscreen": "Ajouter Caméra plein écran (C)"
+		"addCameraFullscreen": "Ajouter Caméra plein écran (C)",
+		"split": "Diviser au curseur (T)",
+		"deleteClip": "Supprimer le clip (ripple)"
 	},
 	"hints": {
 		"pressZoom": "Appuyez sur Z pour ajouter un zoom",

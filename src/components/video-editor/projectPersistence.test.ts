@@ -76,6 +76,17 @@ describe("projectPersistence media compatibility", () => {
 		expect(normalizeProjectEditor({ webcamMirrored: "yes" as never }).webcamMirrored).toBe(false);
 	});
 
+	it("normalizes split points: rounds, clamps, dedupes and sorts", () => {
+		expect(
+			normalizeProjectEditor({ splitPoints: [3200.6, -50, 1000, 1000, 2000.4] }).splitPoints,
+		).toEqual([0, 1000, 2000, 3201]);
+	});
+
+	it("defaults split points to an empty array for legacy projects", () => {
+		expect(normalizeProjectEditor({}).splitPoints).toEqual([]);
+		expect(normalizeProjectEditor({ splitPoints: "nope" as never }).splitPoints).toEqual([]);
+	});
+
 	it("normalizes blur region type and mosaic block size safely", () => {
 		const editor = normalizeProjectEditor({
 			annotationRegions: [

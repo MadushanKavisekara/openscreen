@@ -79,6 +79,7 @@ export interface ProjectEditorState {
 	autoZoomEnabled: boolean;
 	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
+	splitPoints: number[];
 	speedRegions: SpeedRegion[];
 	annotationRegions: AnnotationRegion[];
 	aspectRatio: AspectRatio;
@@ -309,6 +310,12 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 				})
 		: [];
 
+	const normalizedSplitPoints: number[] = Array.isArray(editor.splitPoints)
+		? Array.from(
+				new Set(editor.splitPoints.filter(isFiniteNumber).map((p) => Math.max(0, Math.round(p)))),
+			).sort((a, b) => a - b)
+		: [];
+
 	const normalizedSpeedRegions: SpeedRegion[] = Array.isArray(editor.speedRegions)
 		? editor.speedRegions
 				.filter((region): region is SpeedRegion => Boolean(region && typeof region.id === "string"))
@@ -512,6 +519,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		autoZoomEnabled: typeof editor.autoZoomEnabled === "boolean" ? editor.autoZoomEnabled : true,
 		autoFocusAll: typeof editor.autoFocusAll === "boolean" ? editor.autoFocusAll : false,
 		trimRegions: normalizedTrimRegions,
+		splitPoints: normalizedSplitPoints,
 		speedRegions: normalizedSpeedRegions,
 		annotationRegions: normalizedAnnotationRegions,
 		aspectRatio: normalizedAspectRatio,

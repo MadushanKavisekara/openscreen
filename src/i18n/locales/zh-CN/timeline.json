@@ -6,7 +6,9 @@
 		"addAnnotation": "添加标注 (A)",
 		"addSpeed": "添加速度 (S)",
 		"addBlur": "添加模糊 (B)",
-		"addCameraFullscreen": "添加全屏摄像头 (C)"
+		"addCameraFullscreen": "添加全屏摄像头 (C)",
+		"split": "在播放头处分割 (T)",
+		"deleteClip": "删除片段（波纹）"
 	},
 	"hints": {
 		"pressZoom": "按 Z 添加缩放",

@@ -6,7 +6,9 @@
 		"addAnnotation": "Thêm Chú thích (A)",
 		"addBlur": "Thêm Làm mờ (B)",
 		"addSpeed": "Thêm Tốc độ (S)",
-		"addCameraFullscreen": "Thêm Camera Toàn màn hình (C)"
+		"addCameraFullscreen": "Thêm Camera Toàn màn hình (C)",
+		"split": "Cắt tại con trỏ (T)",
+		"deleteClip": "Xóa clip (ripple)"
 	},
 	"hints": {
 		"pressZoom": "Nhấn Z để thêm thu phóng",

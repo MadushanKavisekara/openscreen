@@ -6,7 +6,9 @@
 		"addAnnotation": "注釈を追加 (A)",
 		"addBlur": "ぼかしを追加 (B)",
 		"addSpeed": "再生速度を追加 (S)",
-		"addCameraFullscreen": "フルスクリーンカメラを追加 (C)"
+		"addCameraFullscreen": "フルスクリーンカメラを追加 (C)",
+		"split": "再生位置で分割 (T)",
+		"deleteClip": "クリップを削除（リップル）"
 	},
 	"hints": {
 		"pressZoom": "Zキーを押してズームを追加",
