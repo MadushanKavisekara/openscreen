@@ -114,6 +114,15 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 		window.electronAPI?.setLocale?.(locale);
 	}, [locale]);
 
+	// Locale is chosen from the native OS menu bar; every window follows the broadcast.
+	useEffect(() => {
+		return window.electronAPI?.onMenuSetLocale?.((nextLocale) => {
+			if (isSupportedLocale(nextLocale)) {
+				setLocale(nextLocale);
+			}
+		});
+	}, [setLocale]);
+
 	useEffect(() => {
 		if (hasRunSystemLocaleCheckRef.current) return;
 		hasRunSystemLocaleCheckRef.current = true;

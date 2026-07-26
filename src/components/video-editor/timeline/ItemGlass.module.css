@@ -1,9 +1,14 @@
-.glassGreen {
+/*
+	Zoom items carry the brand accent (#3A7DFF) — zoom is the app's signature edit.
+	Deliberately deeper/more indigo than `.glassBlue` (camera, sky #38bdf8) so the two
+	stay tellable apart in the same timeline.
+*/
+.glassBrand {
 	position: relative;
 	border-radius: 10px;
 	-corner-smoothing: antialiased;
-	background: linear-gradient(180deg, rgba(52, 178, 123, 0.28), rgba(31, 115, 82, 0.2));
-	border: 1px solid rgba(77, 221, 157, 0.36);
+	background: linear-gradient(180deg, rgba(58, 125, 255, 0.28), rgba(28, 72, 168, 0.2));
+	border: 1px solid rgba(125, 170, 255, 0.36);
 	box-shadow:
 		0 1px 0 rgba(255, 255, 255, 0.1) inset,
 		0 8px 22px rgba(0, 0, 0, 0.22);
@@ -11,17 +16,17 @@
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.glassGreen:hover {
-	background: linear-gradient(180deg, rgba(52, 178, 123, 0.36), rgba(31, 115, 82, 0.25));
-	border-color: rgba(77, 221, 157, 0.62);
+.glassBrand:hover {
+	background: linear-gradient(180deg, rgba(58, 125, 255, 0.36), rgba(28, 72, 168, 0.25));
+	border-color: rgba(125, 170, 255, 0.62);
 }
 
-.glassGreen.selected {
-	background: linear-gradient(180deg, rgba(52, 178, 123, 0.48), rgba(31, 115, 82, 0.32));
-	border-color: #34b27b;
+.glassBrand.selected {
+	background: linear-gradient(180deg, rgba(58, 125, 255, 0.48), rgba(28, 72, 168, 0.32));
+	border-color: #3a7dff;
 	box-shadow:
-		0 0 0 1px rgba(52, 178, 123, 0.95),
-		0 0 0 4px rgba(52, 178, 123, 0.14),
+		0 0 0 1px rgba(58, 125, 255, 0.95),
+		0 0 0 4px rgba(58, 125, 255, 0.14),
 		0 12px 26px rgba(0, 0, 0, 0.28);
 	z-index: 10;
 }
@@ -58,9 +63,9 @@
 	position: relative;
 	border-radius: 10px;
 	-corner-smoothing: antialiased;
-	background: rgba(180, 160, 70, 0.15);
-	border: 1px solid rgba(180, 160, 70, 0.3);
-	box-shadow: 0 2px 12px 0 rgba(180, 160, 70, 0.1) inset;
+	background: rgba(250, 204, 21, 0.15);
+	border: 1px solid rgba(250, 204, 21, 0.3);
+	box-shadow: 0 2px 12px 0 rgba(250, 204, 21, 0.1) inset;
 	margin: 3px 0;
 	backdrop-filter: blur(4px);
 	-webkit-backdrop-filter: blur(4px);
@@ -68,17 +73,17 @@
 }
 
 .glassYellow:hover {
-	background: rgba(180, 160, 70, 0.25);
-	border-color: rgba(180, 160, 70, 0.5);
-	box-shadow: 0 4px 20px 0 rgba(180, 160, 70, 0.2) inset;
+	background: rgba(250, 204, 21, 0.25);
+	border-color: rgba(250, 204, 21, 0.5);
+	box-shadow: 0 4px 20px 0 rgba(250, 204, 21, 0.2) inset;
 }
 
 .glassYellow.selected {
-	background: rgba(180, 160, 70, 0.35);
-	border-color: #b4a046;
+	background: rgba(250, 204, 21, 0.35);
+	border-color: #facc15;
 	box-shadow:
-		0 0 0 1px #b4a046,
-		0 4px 20px 0 rgba(180, 160, 70, 0.3) inset;
+		0 0 0 1px #facc15,
+		0 4px 20px 0 rgba(250, 204, 21, 0.3) inset;
 	z-index: 10;
 }
 
@@ -151,8 +156,8 @@
 		width 0.2s;
 }
 
-.glassGreen:hover .zoomEndCap,
-.glassGreen.selected .zoomEndCap,
+.glassBrand:hover .zoomEndCap,
+.glassBrand.selected .zoomEndCap,
 .glassRed:hover .zoomEndCap,
 .glassRed.selected .zoomEndCap,
 .glassYellow:hover .zoomEndCap,

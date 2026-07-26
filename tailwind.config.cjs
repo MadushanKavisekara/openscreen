@@ -38,6 +38,10 @@ module.exports = {
 				sm: "calc(var(--radius) - 4px)",
 			},
 			colors: {
+				brand: {
+					DEFAULT: "hsl(var(--brand) / <alpha-value>)",
+					foreground: "hsl(var(--brand-foreground) / <alpha-value>)",
+				},
 				background: "hsl(var(--background))",
 				foreground: "hsl(var(--foreground))",
 				card: {

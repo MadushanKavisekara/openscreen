@@ -66,7 +66,7 @@ export default function Item({
 	const isSpeed = variant === "speed";
 
 	const glassClass = isZoom
-		? glassStyles.glassGreen
+		? glassStyles.glassBrand
 		: isCameraFullscreen
 			? glassStyles.glassBlue
 			: isTrim
@@ -76,14 +76,14 @@ export default function Item({
 					: glassStyles.glassYellow;
 
 	const endCapColor = isZoom
-		? "#21916A"
+		? "#3A7DFF"
 		: isCameraFullscreen
 			? "#0ea5e9"
 			: isTrim
 				? "#ef4444"
 				: isSpeed
 					? "#d97706"
-					: "#B4A046";
+					: "#FACC15";
 
 	const timeLabel = useMemo(
 		() => `${formatMs(span.start)} – ${formatMs(span.end)}`,
@@ -111,7 +111,7 @@ export default function Item({
 						"w-full h-full overflow-hidden flex items-center justify-center gap-1.5 cursor-grab active:cursor-grabbing relative",
 						isSelected && glassStyles.selected,
 					)}
-					style={{ height: 30, color: "#fff", minWidth: 24 }}
+					style={{ height: 36, color: "#fff", minWidth: 24 }}
 					onClick={(event) => {
 						event.stopPropagation();
 						onSelect?.();

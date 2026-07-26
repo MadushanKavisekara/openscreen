@@ -223,6 +223,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("menu-load-project", listener);
 		return () => ipcRenderer.removeListener("menu-load-project", listener);
 	},
+	onMenuNewRecording: (callback: () => void) => {
+		const listener = () => callback();
+		ipcRenderer.on("menu-new-recording", listener);
+		return () => ipcRenderer.removeListener("menu-new-recording", listener);
+	},
+	onMenuSaveDiagnostics: (callback: () => void) => {
+		const listener = () => callback();
+		ipcRenderer.on("menu-save-diagnostics", listener);
+		return () => ipcRenderer.removeListener("menu-save-diagnostics", listener);
+	},
+	/** Locale picked from the native Language menu; broadcast to every window. */
+	onMenuSetLocale: (callback: (locale: string) => void) => {
+		const listener = (_event: unknown, locale: string) => callback(locale);
+		ipcRenderer.on("menu-set-locale", listener);
+		return () => ipcRenderer.removeListener("menu-set-locale", listener);
+	},
 	onMenuSaveProject: (callback: () => void) => {
 		const listener = () => callback();
 		ipcRenderer.on("menu-save-project", listener);

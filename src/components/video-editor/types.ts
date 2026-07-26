@@ -370,7 +370,7 @@ export function resolveTextAnnotationContent(existingTextContent?: string): stri
 
 export const DEFAULT_FIGURE_DATA: FigureData = {
 	arrowDirection: "right",
-	color: "#34B27B",
+	color: "#3A7DFF",
 	strokeWidth: 4,
 };
 

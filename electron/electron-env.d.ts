@@ -282,6 +282,9 @@ interface Window {
 		onMenuNewProject: (callback: () => void) => () => void;
 		onMenuImportVideo: (callback: () => void) => () => void;
 		onMenuLoadProject: (callback: () => void) => () => void;
+		onMenuNewRecording: (callback: () => void) => () => void;
+		onMenuSaveDiagnostics: (callback: () => void) => () => void;
+		onMenuSetLocale: (callback: (locale: string) => void) => () => void;
 		onMenuSaveProject: (callback: () => void) => () => void;
 		onMenuSaveProjectAs: (callback: () => void) => () => void;
 		quitApp: () => void;

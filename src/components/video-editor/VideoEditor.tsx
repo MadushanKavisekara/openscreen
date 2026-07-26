@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { ChevronDown, FolderOpen, Languages, Save, Video } from "lucide-react";
+import { ChevronDown, Download, FolderOpen, Languages, Save, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -72,6 +72,7 @@ import { computeClipDeletion, computeSplit } from "./clipEditing";
 import { EditorEmptyState } from "./EditorEmptyState";
 import { EditorMenuBar } from "./EditorMenuBar";
 import { ExportDialog } from "./ExportDialog";
+import { ExportSettingsDialog } from "./ExportSettingsDialog";
 import {
 	DEFAULT_CURSOR_SETTINGS,
 	DEFAULT_EXPORT_SETTINGS,
@@ -270,6 +271,8 @@ export default function VideoEditor() {
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
+	// Pre-export settings overlay, opened from the title bar's Export action.
+	const [showExportSettings, setShowExportSettings] = useState(false);
 	const [showNewRecordingDialog, setShowNewRecordingDialog] = useState(false);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		DEFAULT_EXPORT_SETTINGS.quality,
@@ -976,12 +979,18 @@ export default function VideoEditor() {
 		const removeLoadListener = window.electronAPI.onMenuLoadProject(handleLoadProject);
 		const removeSaveListener = window.electronAPI.onMenuSaveProject(handleSaveProject);
 		const removeSaveAsListener = window.electronAPI.onMenuSaveProjectAs(handleSaveProjectAs);
+		// Goes through the same confirm dialog as the in-app button so the
+		// unsaved-changes guard still applies.
+		const removeNewRecordingListener = window.electronAPI.onMenuNewRecording?.(() =>
+			setShowNewRecordingDialog(true),
+		);
 
 		return () => {
 			removeNewProjectListener?.();
 			removeLoadListener?.();
 			removeSaveListener?.();
 			removeSaveAsListener?.();
+			removeNewRecordingListener?.();
 		};
 	}, [handleNewProject, handleLoadProject, handleSaveProject, handleSaveProjectAs]);
 
@@ -2837,6 +2846,15 @@ export default function VideoEditor() {
 		}
 	}, [exportError, editorState]);
 
+	// Diagnostics are triggered from the native Help menu (see setupApplicationMenu).
+	// Registered here rather than with the other menu listeners because
+	// handleSaveDiagnostic is declared further down the component.
+	useEffect(() => {
+		return window.electronAPI.onMenuSaveDiagnostics?.(() => {
+			void handleSaveDiagnostic();
+		});
+	}, [handleSaveDiagnostic]);
+
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-screen bg-background">
@@ -2852,7 +2870,7 @@ export default function VideoEditor() {
 					<button
 						type="button"
 						onClick={handleLoadProject}
-						className="px-3 py-1.5 rounded-md bg-[#34B27B] text-white text-sm hover:bg-[#34B27B]/90"
+						className="px-3 py-1.5 rounded-md bg-brand text-white text-sm hover:bg-brand/90"
 					>
 						{ts("project.load")}
 					</button>
@@ -2862,7 +2880,7 @@ export default function VideoEditor() {
 	}
 
 	return (
-		<div className="flex flex-col h-screen bg-[#09090b] text-slate-200 overflow-hidden selection:bg-[#34B27B]/30">
+		<div className="flex flex-col h-screen bg-[#09090b] text-slate-200 overflow-hidden selection:bg-brand/30">
 			<Dialog open={showNewRecordingDialog} onOpenChange={setShowNewRecordingDialog}>
 				<DialogContent
 					className="sm:max-w-[425px]"
@@ -2883,7 +2901,7 @@ export default function VideoEditor() {
 						<button
 							type="button"
 							onClick={handleNewRecordingConfirm}
-							className="px-4 py-2 rounded-md bg-[#34B27B] text-white hover:bg-[#34B27B]/90 text-sm font-medium transition-colors"
+							className="px-4 py-2 rounded-md bg-brand text-white hover:bg-brand/90 text-sm font-medium transition-colors"
 						>
 							{t("newRecording.confirm")}
 						</button>
@@ -2962,7 +2980,7 @@ export default function VideoEditor() {
 								setShowAutoCaptionsDialog(false);
 								void generateAutoCaptions(captionWordsMin, captionWordsMax);
 							}}
-							className="bg-[#34B27B] text-white hover:bg-[#34B27B]/90"
+							className="bg-brand text-white hover:bg-brand/90"
 						>
 							{t("autoCaptions.generate")}
 						</Button>
@@ -2971,15 +2989,27 @@ export default function VideoEditor() {
 			</Dialog>
 
 			<div
-				className="h-11 flex-shrink-0 bg-[#070809]/85 backdrop-blur-xl border-b border-white/[0.07] flex items-center justify-between px-5 z-50 shadow-[0_1px_0_rgba(255,255,255,0.03)]"
+				/* pr-2 (8px) matches the Export button's vertical inset — (44px bar - 28px
+				   button) / 2 — so its gap to the top and to the right edge are equal. */
+				className="relative h-11 flex-shrink-0 bg-[#070809]/85 backdrop-blur-xl border-b border-white/[0.07] flex items-center justify-between pl-5 pr-2 z-50 shadow-[0_1px_0_rgba(255,255,255,0.03)]"
 				style={{ WebkitAppRegion: "drag" } as CSSProperties}
 			>
+				{/* App name, centred on the window rather than between the side groups so it
+				    stays put regardless of what the left/right zones contain. */}
+				<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 select-none text-[13px] font-semibold tracking-tight text-slate-300">
+					OpenScreen
+				</span>
+
+				{/*
+					On macOS these controls live in the OS menu bar (App/File/Edit/View/Language),
+					so the title bar stays empty chrome for the traffic lights and window dragging.
+					Windows/Linux auto-hide the native menu (see electron/windows.ts), so the
+					in-app bar is still their only way in.
+				*/}
 				<div
-					className="flex-1 flex items-center gap-1.5"
+					className={`flex-1 items-center gap-1.5 ${isMac ? "hidden" : "flex"}`}
 					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
 				>
-					{/* Custom in-app menu bar. Replaces the native OS menu bar that is
-					    auto-hidden on Windows/Linux (see electron/windows.ts). */}
 					<EditorMenuBar
 						isMac={isMac}
 						t={rawT}
@@ -3035,6 +3065,23 @@ export default function VideoEditor() {
 					>
 						<Save size={15} />
 						{ts("project.save")}
+					</button>
+				</div>
+
+				{/* Primary action. `ml-auto` (not justify-between) keeps it right-aligned even
+				    on macOS, where the left group is hidden and would otherwise be the only child. */}
+				<div
+					className="ml-auto flex items-center"
+					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+				>
+					<button
+						type="button"
+						onClick={() => setShowExportSettings(true)}
+						disabled={!videoPath}
+						className="flex h-7 items-center gap-1.5 rounded-lg bg-brand px-3.5 text-[13px] font-semibold text-white transition-colors duration-150 hover:bg-brand/85 disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						<Download size={15} />
+						{rawT("common.actions.export")}
 					</button>
 				</div>
 			</div>
@@ -3257,49 +3304,6 @@ export default function VideoEditor() {
 										onWebcamSizePresetChange={(v) => updateState({ webcamSizePreset: v })}
 										onWebcamSizePresetCommit={commitState}
 										videoElement={videoPlaybackRef.current?.video || null}
-										exportQuality={exportQuality}
-										onExportQualityChange={setExportQuality}
-										exportFormat={exportFormat}
-										onExportFormatChange={setExportFormat}
-										gifFrameRate={gifFrameRate}
-										onGifFrameRateChange={setGifFrameRate}
-										gifLoop={gifLoop}
-										onGifLoopChange={setGifLoop}
-										gifSizePreset={gifSizePreset}
-										onGifSizePresetChange={setGifSizePreset}
-										gifOutputDimensions={calculateOutputDimensions(
-											calculateEffectiveSourceDimensions(
-												videoPlaybackRef.current?.video?.videoWidth ||
-													DEFAULT_SOURCE_DIMENSIONS.width,
-												videoPlaybackRef.current?.video?.videoHeight ||
-													DEFAULT_SOURCE_DIMENSIONS.height,
-												cropRegion,
-											).width,
-											calculateEffectiveSourceDimensions(
-												videoPlaybackRef.current?.video?.videoWidth ||
-													DEFAULT_SOURCE_DIMENSIONS.width,
-												videoPlaybackRef.current?.video?.videoHeight ||
-													DEFAULT_SOURCE_DIMENSIONS.height,
-												cropRegion,
-											).height,
-											gifSizePreset,
-											GIF_SIZE_PRESETS,
-											aspectRatio === "native"
-												? getNativeAspectRatioValue(
-														videoPlaybackRef.current?.video?.videoWidth ||
-															DEFAULT_SOURCE_DIMENSIONS.width,
-														videoPlaybackRef.current?.video?.videoHeight ||
-															DEFAULT_SOURCE_DIMENSIONS.height,
-														cropRegion,
-													)
-												: getAspectRatioValue(aspectRatio),
-										)}
-										onExport={handleOpenExportDialog}
-										onExportPanelOpen={() => {
-											setSelectedZoomId(null);
-											setSelectedTrimId(null);
-											setSelectedSpeedId(null);
-										}}
 										selectedAnnotationId={selectedAnnotationId}
 										annotationRegions={annotationOnlyRegions}
 										onAnnotationContentChange={handleAnnotationContentChange}
@@ -3321,9 +3325,6 @@ export default function VideoEditor() {
 										}
 										onSpeedChange={handleSpeedChange}
 										onSpeedDelete={handleSpeedDelete}
-										unsavedExport={unsavedExport}
-										onSaveUnsavedExport={handleSaveUnsavedExport}
-										onSaveDiagnostic={handleSaveDiagnostic}
 										showCursor={showCursor}
 										onShowCursorChange={setShowCursor}
 										cursorSize={cursorSize}
@@ -3349,7 +3350,7 @@ export default function VideoEditor() {
 						</Panel>
 
 						<PanelResizeHandle className="editor-resize-handle group">
-							<div className="w-10 h-1 bg-white/20 rounded-full transition-colors group-hover:bg-[#34B27B]/70"></div>
+							<div className="w-10 h-1 bg-white/20 rounded-full transition-colors group-hover:bg-brand/70"></div>
 						</PanelResizeHandle>
 
 						{/* Full-width timeline */}
@@ -3430,6 +3431,47 @@ export default function VideoEditor() {
 					</PanelGroup>
 				</div>
 			)}
+
+			<ExportSettingsDialog
+				isOpen={showExportSettings}
+				onClose={() => setShowExportSettings(false)}
+				onExport={handleOpenExportDialog}
+				videoElement={videoPlaybackRef.current?.video || null}
+				cropRegion={cropRegion}
+				exportQuality={exportQuality}
+				onExportQualityChange={setExportQuality}
+				exportFormat={exportFormat}
+				onExportFormatChange={setExportFormat}
+				gifFrameRate={gifFrameRate}
+				onGifFrameRateChange={setGifFrameRate}
+				gifLoop={gifLoop}
+				onGifLoopChange={setGifLoop}
+				gifSizePreset={gifSizePreset}
+				onGifSizePresetChange={setGifSizePreset}
+				gifOutputDimensions={calculateOutputDimensions(
+					calculateEffectiveSourceDimensions(
+						videoPlaybackRef.current?.video?.videoWidth || DEFAULT_SOURCE_DIMENSIONS.width,
+						videoPlaybackRef.current?.video?.videoHeight || DEFAULT_SOURCE_DIMENSIONS.height,
+						cropRegion,
+					).width,
+					calculateEffectiveSourceDimensions(
+						videoPlaybackRef.current?.video?.videoWidth || DEFAULT_SOURCE_DIMENSIONS.width,
+						videoPlaybackRef.current?.video?.videoHeight || DEFAULT_SOURCE_DIMENSIONS.height,
+						cropRegion,
+					).height,
+					gifSizePreset,
+					GIF_SIZE_PRESETS,
+					aspectRatio === "native"
+						? getNativeAspectRatioValue(
+								videoPlaybackRef.current?.video?.videoWidth || DEFAULT_SOURCE_DIMENSIONS.width,
+								videoPlaybackRef.current?.video?.videoHeight || DEFAULT_SOURCE_DIMENSIONS.height,
+								cropRegion,
+							)
+						: getAspectRatioValue(aspectRatio),
+				)}
+				unsavedExport={unsavedExport}
+				onSaveUnsavedExport={handleSaveUnsavedExport}
+			/>
 
 			<ExportDialog
 				isOpen={showExportDialog}
