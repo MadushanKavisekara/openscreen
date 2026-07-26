@@ -95,6 +95,10 @@ export function createHudOverlayWindow(): BrowserWindow {
 	const y = Math.floor(workArea.y + workArea.height - windowHeight - 5);
 
 	const win = new BrowserWindow({
+		// Frameless, so this never shows as a title bar — but it is what the window
+		// reports to the OS (Mission Control, accessibility). Without it the window
+		// falls back to app.getName(), which is the lowercase package name in dev.
+		title: "Screenly",
 		width: windowWidth,
 		height: windowHeight,
 		// Min/max are intentionally loose: the renderer resizes to fit content via
@@ -181,7 +185,7 @@ export function createEditorWindow(): BrowserWindow {
 		resizable: true,
 		alwaysOnTop: false,
 		skipTaskbar: false,
-		title: "OpenScreen",
+		title: "Screenly",
 		backgroundColor: "#09090b",
 		show: false, // shown via ready-to-show to avoid white flash on first load
 		webPreferences: {
@@ -337,7 +341,7 @@ export function createNotesWindow(): BrowserWindow {
 		minHeight: 400,
 		maxWidth: 640,
 		maxHeight: 720,
-		title: "OpenScreen - Notes",
+		title: "Screenly - Notes",
 		backgroundColor: "#09090b",
 		resizable: true,
 		alwaysOnTop: true,

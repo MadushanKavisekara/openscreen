@@ -45,7 +45,14 @@ import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
-const PROJECT_FILE_EXTENSION = "openscreen";
+const PROJECT_FILE_EXTENSION = "screenly";
+/**
+ * Projects saved before the OpenScreen → Screenly rename. New projects are always
+ * written as `.screenly`, but these stay openable — the file format is unchanged,
+ * only the name is.
+ */
+const LEGACY_PROJECT_FILE_EXTENSION = "openscreen";
+const PROJECT_FILE_EXTENSIONS = [PROJECT_FILE_EXTENSION, LEGACY_PROJECT_FILE_EXTENSION];
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_FILE_PREFIX = "recording-";
 const RECORDING_SESSION_SUFFIX = ".session.json";
@@ -622,7 +629,7 @@ function resolvePackagedResourcePath(...segments: string[]) {
 }
 
 function getNativeWindowsCaptureHelperCandidates() {
-	const envPath = process.env.OPENSCREEN_WGC_CAPTURE_EXE?.trim();
+	const envPath = process.env.SCREENLY_WGC_CAPTURE_EXE?.trim();
 	const archTag = process.arch === "arm64" ? "win32-arm64" : "win32-x64";
 	return [
 		envPath,
@@ -658,9 +665,9 @@ async function findNativeWindowsCaptureHelperPath() {
 }
 
 function getNativeMacCaptureHelperCandidates() {
-	const envPath = process.env.OPENSCREEN_SCK_CAPTURE_EXE?.trim();
+	const envPath = process.env.SCREENLY_SCK_CAPTURE_EXE?.trim();
 	const archTag = process.arch === "arm64" ? "darwin-arm64" : "darwin-x64";
-	const helperName = "openscreen-screencapturekit-helper";
+	const helperName = "screenly-screencapturekit-helper";
 	return [
 		envPath,
 		resolveUnpackedAppPath("electron", "native", "screencapturekit", "build", helperName),
@@ -1319,7 +1326,7 @@ export function registerIpcHandlers(
 			}
 
 			// Screen recording has no askForMediaAccess equivalent, so trigger the
-			// TCC prompt without opening OpenScreen's source selector above it.
+			// TCC prompt without opening Screenly's source selector above it.
 			if (status === "not-determined") {
 				const mainWin = getMainWindow();
 				if (mainWin && !mainWin.isDestroyed()) {
@@ -1437,7 +1444,7 @@ export function registerIpcHandlers(
 			const detail =
 				access.status === "missing-helper"
 					? "The cursor helper couldn't be found in this build, so the editable cursor can't be enabled. Rebuild the native helper (npm run build:native:mac) or switch the HUD cursor mode to system."
-					: "Allow OpenScreen under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
+					: "Allow Screenly under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
 			const messageOptions = {
 				type: "warning",
 				buttons: ["Open Accessibility Settings", "Cancel"],
@@ -1472,7 +1479,7 @@ export function registerIpcHandlers(
 					cancelId: 1,
 					message: "Screen Recording permission is required",
 					detail:
-						"Allow OpenScreen in macOS System Settings, then come back and choose a screen or window.",
+						"Allow Screenly in macOS System Settings, then come back and choose a screen or window.",
 				} satisfies Electron.MessageBoxOptions;
 				const result =
 					mainWin && !mainWin.isDestroyed()
@@ -1640,7 +1647,7 @@ export function registerIpcHandlers(
 					: null;
 				const cursorCaptureMode =
 					normalizeCursorCaptureMode(request.cursor?.mode) ?? "editable-overlay";
-				const envPreferSoftwareEncoder = (process.env.OPENSCREEN_WGC_PREFER_SOFTWARE_ENCODER ?? "")
+				const envPreferSoftwareEncoder = (process.env.SCREENLY_WGC_PREFER_SOFTWARE_ENCODER ?? "")
 					.trim()
 					.toLowerCase();
 				const preferSoftwareEncoder =
@@ -2743,7 +2750,7 @@ export function registerIpcHandlers(
 					defaultPath: path.join(RECORDINGS_DIR, defaultName),
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
+							name: mainT("dialogs", "fileDialogs.screenlyProject"),
 							extensions: [PROJECT_FILE_EXTENSION],
 						},
 						{ name: "JSON", extensions: ["json"] },
@@ -2810,8 +2817,8 @@ export function registerIpcHandlers(
 					defaultPath: defaultDir,
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION],
+							name: mainT("dialogs", "fileDialogs.screenlyProject"),
+							extensions: PROJECT_FILE_EXTENSIONS,
 						},
 						{ name: "JSON", extensions: ["json"] },
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
@@ -2857,8 +2864,9 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 			// Validate extension and readability
-			if (path.extname(filePath).toLowerCase() !== `.${PROJECT_FILE_EXTENSION}`) {
-				return { success: false, message: "Not an Openscreen project file" };
+			const extension = path.extname(filePath).toLowerCase().replace(/^\./, "");
+			if (!PROJECT_FILE_EXTENSIONS.includes(extension)) {
+				return { success: false, message: "Not a Screenly project file" };
 			}
 			const stats = await fs.stat(filePath).catch(() => null);
 			if (!stats?.isFile()) {
@@ -3009,7 +3017,7 @@ export function registerIpcHandlers(
 		) => {
 			const { filePath, canceled } = await dialog.showSaveDialog({
 				title: "Save Diagnostic File",
-				defaultPath: `openscreen-diagnostic-${Date.now()}.json`,
+				defaultPath: `screenly-diagnostic-${Date.now()}.json`,
 				filters: [{ name: "JSON", extensions: ["json"] }],
 			});
 

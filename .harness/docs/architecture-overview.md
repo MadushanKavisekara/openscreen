@@ -1,10 +1,10 @@
-# OpenScreen Architecture Notes
+# Screenly Architecture Notes
 
 Quick map of how the app fits together, for the Mavis reins. For deeper details, see `../docs/architecture/native-bridge.md` and `../docs/engineering/`.
 
 ## Process layout
 
-OpenScreen is a three-process Electron app:
+Screenly is a three-process Electron app:
 
 1. **Main process** (`electron/main.ts` + siblings) — owns window lifecycle, IPC handlers, the recording orchestrator, and child-process management for the native helpers.
 2. **Renderer** (`src/`) — React 18 + Vite app. The UI, the editor, the timeline, the Pixi.js composition surface, and the i18n layer. Runs with `contextIsolation: true`.

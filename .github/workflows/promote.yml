@@ -55,13 +55,13 @@ jobs:
 
       - name: Close versioned milestone
         env:
-          TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_VERSION: ${{ steps.version.outputs.stable_version }}
         run: node .github/scripts/release-milestone-close.mjs
 
       - name: Bump package.json to stable version on the release branch
         env:
-          TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_VERSION: ${{ steps.version.outputs.stable_version }}
         run: |
           set -euo pipefail
@@ -103,7 +103,7 @@ jobs:
 
       - name: Merge release branch into main
         env:
-          GH_TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_VERSION: ${{ steps.version.outputs.stable_version }}
         run: |
           set -euo pipefail
@@ -137,7 +137,7 @@ jobs:
 
       - name: Trigger build workflow
         env:
-          GH_TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_TAG: ${{ steps.version.outputs.stable_tag }}
         run: |
           set -euo pipefail
@@ -158,7 +158,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_RELEASE_CHANNEL_ID: ${{ vars.DISCORD_RELEASE_CHANNEL_ID }}
-          GITHUB_TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_TAG: ${{ steps.version.outputs.stable_tag }}
           RC_TAG: ${{ steps.version.outputs.rc_tag }}
           EXTRA: ${{ inputs.release_notes_extra }}
@@ -172,5 +172,5 @@ jobs:
             echo ""
             echo "- Stable tag: \`${{ steps.version.outputs.stable_tag }}\`"
             echo "- Promoted from: \`${{ steps.version.outputs.rc_tag }}\`"
-            echo "- Tier 3 (homebrew/winget/nix/aur) will fire on the published release via OPENSCREEN_RELEASE_TOKEN."
+            echo "- Tier 3 (homebrew/winget/nix/aur) will fire on the published release via SCREENLY_RELEASE_TOKEN."
           } >> "$GITHUB_STEP_SUMMARY"

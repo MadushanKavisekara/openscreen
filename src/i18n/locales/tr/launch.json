@@ -54,13 +54,13 @@
 	"language": "Dil",
 	"systemLanguagePrompt": {
 		"title": "Sistem dilinizi kullanmak ister misiniz?",
-		"description": "Sistem diliniz {{language}} olarak algılandı. OpenScreen i {{language}} diline geçirmek ister misiniz?",
+		"description": "Sistem diliniz {{language}} olarak algılandı. Screenly i {{language}} diline geçirmek ister misiniz?",
 		"switch": "{{language}} diline geç",
 		"keepDefault": "Mevcut dili koru"
 	},
 	"softwareEncoderFallback": {
 		"title": "Yazılım kodlamasına geçildi",
-		"description": "Varsayılan GPU kodlayıcı başlatılamadığı için OpenScreen yazılım tabanlı H.264 kodlamasına geçti. Kayıt normal şekilde devam eder, ancak CPU kullanımı daha yüksek olabilir.",
+		"description": "Varsayılan GPU kodlayıcı başlatılamadığı için Screenly yazılım tabanlı H.264 kodlamasına geçti. Kayıt normal şekilde devam eder, ancak CPU kullanımı daha yüksek olabilir.",
 		"dismiss": "Anladım",
 		"dontShowAgain": "Bir daha gösterme"
 	}

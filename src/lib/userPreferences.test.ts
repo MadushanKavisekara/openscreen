@@ -69,12 +69,12 @@ describe("projectFolder preference", () => {
 	});
 
 	it("ignores non-string persisted values and falls back to the default", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ projectFolder: 42 }));
+		localStorage.setItem("screenly_user_preferences", JSON.stringify({ projectFolder: 42 }));
 		expect(loadUserPreferences().projectFolder).toBe(DEFAULT_PREFS.projectFolder);
 	});
 
 	it("ignores empty-string persisted values and falls back to the default", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ projectFolder: "" }));
+		localStorage.setItem("screenly_user_preferences", JSON.stringify({ projectFolder: "" }));
 		expect(loadUserPreferences().projectFolder).toBe(DEFAULT_PREFS.projectFolder);
 	});
 
@@ -99,7 +99,7 @@ describe("user preferences", () => {
 	});
 
 	it("falls back to the default tray layout for invalid stored values", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
+		localStorage.setItem("screenly_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
 
 		expect(loadUserPreferences().trayLayout).toBe("horizontal");
 	});
@@ -112,7 +112,7 @@ describe("user preferences", () => {
 
 	it("falls back to the default software encoder preference for invalid stored values", () => {
 		localStorage.setItem(
-			"openscreen_user_preferences",
+			"screenly_user_preferences",
 			JSON.stringify({ preferSoftwareEncoder: "yes" }),
 		);
 
@@ -127,7 +127,7 @@ describe("user preferences", () => {
 
 	it("falls back to showing the software encoder fallback notice for invalid stored values", () => {
 		localStorage.setItem(
-			"openscreen_user_preferences",
+			"screenly_user_preferences",
 			JSON.stringify({ hideSoftwareEncoderFallbackNotice: "yes" }),
 		);
 

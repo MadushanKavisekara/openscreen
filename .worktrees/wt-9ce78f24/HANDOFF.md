@@ -1,18 +1,18 @@
 # AI-Edition Implementation Handoff
 
 **Branch**: `docs/ai-edition-plan` (commit `cf25858`, pushed to `origin`)
-**Worktree**: `G:\repos\openscreen\.worktrees\wt-9ce78f24`
+**Worktree**: `G:\repos\screenly\.worktrees\wt-9ce78f24`
 **Dev server**: `http://localhost:5173/?windowType=editor` (browser mode with shim)
 
 ---
 
 ## 1. Context
 
-The user (Etienne Lescot, repo owner) was working through the implementation of the **OpenScreen x Axcut AI-edition merge**. The original PR #35 (commit `1e9db17` on the same branch) introduced the planning docs only:
+The user (Etienne Lescot, repo owner) was working through the implementation of the **Screenly x Axcut AI-edition merge**. The original PR #35 (commit `1e9db17` on the same branch) introduced the planning docs only:
 
 - `docs/architecture/ai-edition-merge-plan.md` — the 10-phase merge plan
 - `docs/architecture/axcut-inventory.md` — catalog of the axcut codebase
-- `docs/architecture/openscreen-inventory.md` — catalog of the OpenScreen codebase
+- `docs/architecture/screenly-inventory.md` — catalog of the Screenly codebase
 - `docs/architecture/ai-edition-collision-analysis.md` — collision analysis
 
 This implementation PR (`cf25858`) delivers the **code** for that plan — all phases 0, 1, 3, 4, 6-8, and partial 9, plus a developer-convenience browser shim and spec updates that changed the framing.
@@ -75,9 +75,9 @@ This is the spec's `§0 Framing` section. See `docs/architecture/ai-edition-merg
 | File | Purpose |
 |------|---------|
 | `IconRail.tsx` | Vertical 36-44px icon rail with collapse/expand chevron. Used for both left and right rails. Tooltip on hover. |
-| `NewEditorShell.tsx` | **The default editor** for all users (replaces legacy `VideoEditor`). Layout: top header (project title + 3 toggle buttons) + body with left rail | left content (Project/Chat) | center (video + timeline) | right content (Transcript/Background/Video effects/Camera/Cursor/Crop/Export) | right rail. Recording → asset on editor open (auto-creates project + adds asset). Legacy `.openscreen` loading via the "Open" header button (migrates v2 → v3). |
+| `NewEditorShell.tsx` | **The default editor** for all users (replaces legacy `VideoEditor`). Layout: top header (project title + 3 toggle buttons) + body with left rail | left content (Project/Chat) | center (video + timeline) | right content (Transcript/Background/Video effects/Camera/Cursor/Crop/Export) | right rail. Recording → asset on editor open (auto-creates project + adds asset). Legacy `.screenly` loading via the "Open" header button (migrates v2 → v3). |
 | `AiEditionShell.tsx` | Re-exports `AiEditionOrLegacy` which delegates to `NewEditorShell` (legacy VideoEditor is now unused but kept for rollback). |
-| `ProjectPanel.tsx` | Left content: project list + create input + assets list. Uses raw Tailwind matching OpenScreen's dark surface. |
+| `ProjectPanel.tsx` | Left content: project list + create input + assets list. Uses raw Tailwind matching Screenly's dark surface. |
 | `TimelinePane.tsx` + `.module.css` | Ported from axcut `apps/web/src/components/TimelinePane.tsx` (~837 lines). Ruler, kept/cut segments, playhead, zoom (Ctrl+wheel), pan (Alt+drag), add cut, delete cut, resize cut handles, fit button, navigator overview. |
 | `VirtualPreview.tsx` + `.module.css` | Ported from axcut `apps/web/src/components/VirtualPreview.tsx`. Single-video element with virtual-time seeking; seeks across clip boundaries; reports metadata via `onLoadedMetadata`; exposes video element via `onVideoElement` callback. |
 | `TranscriptEditor.tsx` + `.module.css` | Click word / shift-click word → range → "Cut" button → `dropWordRange` op. Kept words = default, skipped = red strikethrough. |
@@ -128,7 +128,7 @@ The original plan treated "AI-edition" as a single opt-in feature. Mid-implement
 
 ### 4.2 Why the new editor ships as the default despite incomplete feature parity
 
-The spec calls for full feature parity (annotations, zoom, cursor, webcam, blur, crop, export, legacy `.openscreen` loading). The implementation delivers the **architecture** and the **export, legacy loading, transcript, transcription, settings panel** integrations, but the new editor's UI is intentionally simpler than the legacy `VideoEditor` for some affordances (no annotations/zoom UI for adding new ones, just editing existing ones from the `SettingsPanel`). This is acceptable for a first cut because:
+The spec calls for full feature parity (annotations, zoom, cursor, webcam, blur, crop, export, legacy `.screenly` loading). The implementation delivers the **architecture** and the **export, legacy loading, transcript, transcription, settings panel** integrations, but the new editor's UI is intentionally simpler than the legacy `VideoEditor` for some affordances (no annotations/zoom UI for adding new ones, just editing existing ones from the `SettingsPanel`). This is acceptable for a first cut because:
 - The legacy `VideoEditor` is still on disk and reachable via git (rollback path)
 - Adding the remaining UI affordances is incremental (no new architecture needed)
 - The `SettingsPanel` integration already lets users edit every field that exists in their v3 document
@@ -170,7 +170,7 @@ These are deliberate deferrals, not oversights:
 ### 6.1 Resume this branch
 
 ```bash
-cd G:\repos\openscreen\.worktrees\wt-9ce78f24
+cd G:\repos\screenly\.worktrees\wt-9ce78f24
 git status  # should be clean
 git log --oneline -3
 npm run dev  # already running, port 5173
@@ -214,7 +214,7 @@ The file `src/components/video-editor/VideoEditor.tsx` (2961 lines) is now unuse
 ## 7. File map (where to look)
 
 ```
-G:\repos\openscreen\.worktrees\wt-9ce78f24\
+G:\repos\screenly\.worktrees\wt-9ce78f24\
 ├── docs/architecture/
 │   └── ai-edition-merge-plan.md          # updated §0, §5.9, §10
 ├── electron/
@@ -275,17 +275,17 @@ G:\repos\openscreen\.worktrees\wt-9ce78f24\
 4. User asked for total spec completion. Implemented PR 1.2 + 1.3 (timeline port, preview port, new editor shell with kill-switch).
 5. User said "implement 1, 2, and 3" with the axcut `\\wsl.localhost\Ubuntu\home\etienne\repos\axcut\` path. Implemented:
    - Export (Phase 3) — adapter to existing VideoExporter
-   - Legacy `.openscreen` loading — migrate v2 → v3
+   - Legacy `.screenly` loading — migrate v2 → v3
    - Settings panel (annotations, zoom, cursor, webcam, wallpaper) — bridge to `SettingsPanel`
 6. User said "go on → full implementation". Implemented Phases 6-8 scaffolding (provider registry, LLM config store with safeStorage, chat service stub, IPC contracts) and Phase 9 partial (settings toggle, i18n deferred).
 7. User asked to relaunch in browser. Added `browserShim.ts` for `http://localhost:5173/?windowType=editor`.
-8. User asked for UI redesign to match original OpenScreen + axcut layout. Implemented:
+8. User asked for UI redesign to match original Screenly + axcut layout. Implemented:
    - Left icon rail (Project / Chat)
    - Right icon rail (Transcript / Background / Video effects / Camera / Cursor / Crop / Export)
    - Top header (project title + PanelLeft / PanelRight / Download)
    - NewEditorShell with full-height columns
    - Removed the chevron collapse buttons (user requested)
-   - Used original OpenScreen SettingsPanel icons
+   - Used original Screenly SettingsPanel icons
    - Added `hideInternalRail` prop so the right rail is the only navigation
 9. User asked about worktree, branch, commit, push. Confirmed branch (`docs/ai-edition-plan`), committed and pushed.
 10. User asked for a handoff summary in English for a coding agent.

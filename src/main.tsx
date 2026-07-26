@@ -3,7 +3,14 @@ import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import { I18nProvider } from "./contexts/I18nContext";
 import { clearStaleSourceCache } from "./lib/exporter/localSourceFile";
+import { migrateLegacyStorageKeys } from "./lib/legacyStorageMigration";
 import "./index.css";
+
+// Must run before anything reads settings, so a user upgrading from OpenScreen
+// keeps their preferences, fonts, cursor packs and language. Every consumer reads
+// storage lazily (inside functions or on render), so doing this ahead of the first
+// render is early enough.
+migrateLegacyStorageKeys();
 
 const windowType = new URLSearchParams(window.location.search).get("windowType") || "";
 

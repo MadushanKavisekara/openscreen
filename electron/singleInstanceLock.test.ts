@@ -7,7 +7,7 @@ import { acquireStableInstanceLock } from "./singleInstanceLock";
 const testDirs: string[] = [];
 
 function createTestLockDir() {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openscreen-lock-test-"));
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "screenly-lock-test-"));
 	testDirs.push(dir);
 	return path.join(dir, "app.lock");
 }

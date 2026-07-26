@@ -71,13 +71,13 @@ jobs:
 
       - name: Migrate issues from "Next Release" to versioned milestone
         env:
-          TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           NEXT: ${{ steps.version.outputs.next }}
         run: node .github/scripts/release-milestone-migrate.mjs
 
       - name: Create or reuse the release branch and bump package.json
         env:
-          TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
           NEXT: ${{ steps.version.outputs.next }}
         run: |
@@ -135,7 +135,7 @@ jobs:
 
       - name: Trigger build workflow
         env:
-          GH_TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           RC_TAG: ${{ steps.version.outputs.rc_tag }}
         run: |
           set -euo pipefail
@@ -159,7 +159,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_RC_TESTING_CHANNEL_ID: ${{ vars.DISCORD_RC_TESTING_CHANNEL_ID }}
-          GITHUB_TOKEN: ${{ secrets.OPENSCREEN_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SCREENLY_RELEASE_TOKEN }}
           STABLE_TAG: ${{ steps.version.outputs.rc_tag }}
           KIND: rc
         run: node .github/scripts/discord-release-announce.mjs

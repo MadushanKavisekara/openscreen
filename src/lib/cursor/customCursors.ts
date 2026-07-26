@@ -14,7 +14,7 @@ import type { CursorThemeAsset } from "./cursorThemes";
  */
 
 export const CUSTOM_CURSOR_ID_PREFIX = "custom:";
-const STORAGE_KEY = "openscreen_custom_cursors";
+const STORAGE_KEY = "screenly_custom_cursors";
 
 /** Keeps one runaway import from crowding out the rest of the app's stored settings. */
 export const MAX_CUSTOM_CURSOR_PACKS = 24;

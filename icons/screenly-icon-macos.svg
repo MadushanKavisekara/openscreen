@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Screenly">
+  <title>Screenly</title>
+  <defs>
+    <linearGradient id="screenlyBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#333333"/>
+      <stop offset="55%" stop-color="#1C1C1C"/>
+      <stop offset="100%" stop-color="#0F0F0F"/>
+    </linearGradient>
+    <linearGradient id="screenlyGlyph" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6394FF"/>
+      <stop offset="45%" stop-color="#3A7DFF"/>
+      <stop offset="100%" stop-color="#2160F5"/>
+    </linearGradient>
+    <linearGradient id="screenlyRim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="55%" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100.045" y="100.045" width="823.91" height="823.91" rx="184.309" ry="184.309" fill="url(#screenlyBg)"/>
+  <rect x="103.34" y="103.34" width="817.319" height="817.319" rx="181.013" ry="181.013" fill="none" stroke="url(#screenlyRim)" stroke-width="6.591"/>
+  <path d="M 512 248.349 A 263.651 263.651 0 0 1 727.149 664.39 L 598.701 664.39 A 175.328 175.328 0 0 0 512 336.672 Z" fill="url(#screenlyGlyph)" stroke="#7FADFF" stroke-width="4.12" stroke-linejoin="round"/>
+  <path d="M 512 775.651 A 263.651 263.651 0 0 1 296.851 359.61 L 425.299 359.61 A 175.328 175.328 0 0 0 512 687.328 Z" fill="url(#screenlyGlyph)" stroke="#7FADFF" stroke-width="4.12" stroke-linejoin="round"/>
+</svg>

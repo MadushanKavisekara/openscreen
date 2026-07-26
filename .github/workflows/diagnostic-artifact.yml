@@ -26,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $bundle = "openscreen-diagnostic-windows-x64"
+          $bundle = "screenly-diagnostic-windows-x64"
           $staging = New-Item -ItemType Directory -Path "$bundle"
           Copy-Item scripts/diagnostic-tool/diagnostic.mjs -Destination $staging
           Copy-Item scripts/diagnostic-tool/diagnostic.bat -Destination $staging
@@ -43,8 +43,8 @@ jobs:
         # Validate bundle structure + CLI parser instead of running capture.
         run: |
           $ErrorActionPreference = "Stop"
-          Expand-Archive -Path openscreen-diagnostic-windows-x64.zip -DestinationPath smoke
-          $smoke = Resolve-Path "smoke/openscreen-diagnostic-windows-x64"
+          Expand-Archive -Path screenly-diagnostic-windows-x64.zip -DestinationPath smoke
+          $smoke = Resolve-Path "smoke/screenly-diagnostic-windows-x64"
           foreach ($rel in @(
             "diagnostic.mjs",
             "diagnostic.bat",
@@ -60,8 +60,8 @@ jobs:
       - name: Upload Windows diagnostic bundle
         uses: actions/upload-artifact@v4
         with:
-          name: openscreen-diagnostic-windows-x64
-          path: openscreen-diagnostic-windows-x64.zip
+          name: screenly-diagnostic-windows-x64
+          path: screenly-diagnostic-windows-x64.zip
           if-no-files-found: error
           retention-days: 14
 
@@ -80,27 +80,27 @@ jobs:
       - name: Build native helper
         run: npm run build:native:mac
         env:
-          OPENSCREEN_MAC_HELPER_ARCHS: ${{ matrix.arch }}
+          SCREENLY_MAC_HELPER_ARCHS: ${{ matrix.arch }}
 
       - name: Bundle diagnostic tool
         run: |
           set -euo pipefail
           arch="${{ matrix.arch }}"
           arch_tag="darwin-$([ "$arch" = "x64" ] && echo x64 || echo arm64)"
-          bundle="openscreen-diagnostic-macos-$arch"
+          bundle="screenly-diagnostic-macos-$arch"
           rm -rf "$bundle" "$bundle.tar.gz"
           mkdir -p "$bundle/helpers/$arch_tag"
           cp scripts/diagnostic-tool/diagnostic.mjs "$bundle/"
           cp scripts/diagnostic-tool/diagnostic.sh "$bundle/"
           cp scripts/diagnostic-tool/README.md "$bundle/"
-          cp "electron/native/bin/$arch_tag/openscreen-screencapturekit-helper" "$bundle/helpers/$arch_tag/"
-          chmod +x "$bundle/diagnostic.sh" "$bundle/helpers/$arch_tag/openscreen-screencapturekit-helper"
+          cp "electron/native/bin/$arch_tag/screenly-screencapturekit-helper" "$bundle/helpers/$arch_tag/"
+          chmod +x "$bundle/diagnostic.sh" "$bundle/helpers/$arch_tag/screenly-screencapturekit-helper"
           tar -czf "$bundle.tar.gz" "$bundle"
 
       - name: Upload macOS diagnostic bundle
         uses: actions/upload-artifact@v4
         with:
-          name: openscreen-diagnostic-macos-${{ matrix.arch }}
-          path: openscreen-diagnostic-macos-${{ matrix.arch }}.tar.gz
+          name: screenly-diagnostic-macos-${{ matrix.arch }}
+          path: screenly-diagnostic-macos-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
           retention-days: 14

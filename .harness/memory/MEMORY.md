@@ -1,4 +1,4 @@
-# OpenScreen — Shared Team Memory
+# Screenly — Shared Team Memory
 
 This file is the shared memory across all Mavis reins in this repo. Add durable facts here that the team should remember across sessions: build quirks, gotchas, environment-specific notes.
 

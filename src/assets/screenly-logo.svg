@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Screenly">
+  <title>Screenly</title>
+  <defs>
+    <linearGradient id="screenlyMark" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6FA0FF"/>
+      <stop offset="45%" stop-color="#3A7DFF"/>
+      <stop offset="100%" stop-color="#1A66FA"/>
+    </linearGradient>
+  </defs>
+  <path d="M 256 3.072 A 252.928 252.928 0 0 1 462.399 402.192 L 339.175 402.192 A 168.197 168.197 0 0 0 256 87.803 Z" fill="url(#screenlyMark)" stroke="#7FADFF" stroke-width="2.304" stroke-linejoin="round"/>
+  <path d="M 256 508.928 A 252.928 252.928 0 0 1 49.601 109.808 L 172.825 109.808 A 168.197 168.197 0 0 0 256 424.197 Z" fill="url(#screenlyMark)" stroke="#7FADFF" stroke-width="2.304" stroke-linejoin="round"/>
+</svg>

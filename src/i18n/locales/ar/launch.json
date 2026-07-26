@@ -50,7 +50,7 @@
 	"language": "اللغة",
 	"systemLanguagePrompt": {
 		"title": "هل تريد استخدام لغة نظامك؟",
-		"description": "اكتشفنا أن {{language}} هي لغة نظامك. هل تريد تبديل OpenScreen إلى {{language}}؟",
+		"description": "اكتشفنا أن {{language}} هي لغة نظامك. هل تريد تبديل Screenly إلى {{language}}؟",
 		"switch": "التبديل إلى {{language}}",
 		"keepDefault": "الاحتفاظ باللغة الحالية"
 	},
@@ -60,7 +60,7 @@
 	},
 	"softwareEncoderFallback": {
 		"title": "تم التبديل إلى الترميز البرمجي",
-		"description": "تعذّر تشغيل مرمّز GPU الافتراضي، لذا تحوّل OpenScreen إلى ترميز H.264 البرمجي. سيستمر التسجيل كالمعتاد، لكن استخدام المعالج قد يكون أعلى.",
+		"description": "تعذّر تشغيل مرمّز GPU الافتراضي، لذا تحوّل Screenly إلى ترميز H.264 البرمجي. سيستمر التسجيل كالمعتاد، لكن استخدام المعالج قد يكون أعلى.",
 		"dismiss": "حسنًا",
 		"dontShowAgain": "عدم الإظهار مرة أخرى"
 	}

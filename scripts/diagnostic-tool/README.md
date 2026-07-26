@@ -1,4 +1,4 @@
-# OpenScreen standalone diagnostic tool
+# Screenly standalone diagnostic tool
 
 A small Node.js script that runs the native capture helper outside the
 Electron app, captures its stdout/stderr, and writes a JSON report.
@@ -9,14 +9,14 @@ data without installing or rebuilding the full app.
 
 ## Requirements
 
-- Node.js 22+ (OpenScreen's own engine pin)
+- Node.js 22+ (Screenly's own engine pin)
 - The native capture helper for your platform in one of:
   - the same directory as `diagnostic.mjs` (`wgc-capture.exe` on Windows,
-    `openscreen-screencapturekit-helper` on macOS)
+    `screenly-screencapturekit-helper` on macOS)
   - `helpers/<platform>-<arch>/<helper-name>` (CI artifact layout)
-  - `$OPENSCREEN_HELPER_EXE` env var
+  - `$SCREENLY_HELPER_EXE` env var
 
-Linux is not currently supported — OpenScreen has no Linux native helper.
+Linux is not currently supported — Screenly has no Linux native helper.
 
 ## Usage
 
@@ -26,7 +26,7 @@ node diagnostic.mjs --duration 10 --output ./diag.json
 
 Flags:
 - `-d, --duration <seconds>` recording length before sending stop (default 10)
-- `-o, --output <path>` output JSON path (default `./openscreen-diagnostic-<timestamp>.json`)
+- `-o, --output <path>` output JSON path (default `./screenly-diagnostic-<timestamp>.json`)
 - `--window` capture a window instead of the full display (default: display)
 - `-h, --help` show help
 

@@ -73,7 +73,7 @@ async function fetchWithRetry(url) {
 	let lastErr;
 	for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
 		try {
-			const res = await fetch(url, { headers: { "user-agent": "openscreen-build" } });
+			const res = await fetch(url, { headers: { "user-agent": "screenly-build" } });
 			if (res.ok && res.body) return res;
 			if (RETRYABLE_STATUS.has(res.status) && attempt < MAX_ATTEMPTS) {
 				const wait = backoffMs(attempt, res.headers.get("retry-after"));

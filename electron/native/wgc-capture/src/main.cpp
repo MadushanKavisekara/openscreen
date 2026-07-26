@@ -398,7 +398,7 @@ int main(int argc, char* argv[]) {
 
     char injectDefaultSinkWriterFailure[2]{};
     const DWORD injectDefaultSinkWriterFailureLength = GetEnvironmentVariableA(
-        "OPENSCREEN_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE",
+        "SCREENLY_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE",
         injectDefaultSinkWriterFailure,
         static_cast<DWORD>(sizeof(injectDefaultSinkWriterFailure)));
     const bool injectDefaultSinkWriterFailureOnce =

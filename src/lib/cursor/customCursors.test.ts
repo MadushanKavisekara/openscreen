@@ -99,7 +99,7 @@ describe("custom cursor library", () => {
 
 	it("discards malformed records rather than breaking the library", () => {
 		localStorage.setItem(
-			"openscreen_custom_cursors",
+			"screenly_custom_cursors",
 			JSON.stringify([{ id: "custom:broken" }, makePack()]),
 		);
 		resetCustomCursorCacheForTests();

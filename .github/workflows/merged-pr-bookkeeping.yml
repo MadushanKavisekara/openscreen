@@ -233,7 +233,7 @@ jobs:
                 state_reason: "completed",
               });
 
-              const marker = `<!-- openscreen-merged-pr-bookkeeping:${pullNumber} -->`;
+              const marker = `<!-- screenly-merged-pr-bookkeeping:${pullNumber} -->`;
               if (!(await hasBookkeepingComment(issueNumber, marker))) {
                 await github.rest.issues.createComment({
                   owner,

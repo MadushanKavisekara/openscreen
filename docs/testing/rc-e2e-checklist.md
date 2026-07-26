@@ -14,7 +14,7 @@ build/commit tested and any findings (with a linked issue) at the bottom.
 1. Launch the build under test (`npm run dev` for a branch/worktree, or the packaged
    RC installer for a full release candidate).
 2. Grant computer-use access to the app's process (`electron.exe` for a dev build,
-   `Openscreen.exe`/`Openscreen.app` for a packaged build).
+   `Screenly.exe`/`Screenly.app` for a packaged build).
 3. Work through the sections in order — later sections (Editor, Persistence) depend
    on having a real recording from the Capture section.
 4. Crashes, hangs, data loss, and security issues are logged the first time they occur — note full repro details immediately, don't wait to reproduce twice. For anything else (a one-off visual glitch, a flaky-looking timing issue), reproduce it again before treating it as a real finding rather than noise.

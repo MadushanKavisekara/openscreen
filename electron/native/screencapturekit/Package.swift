@@ -3,28 +3,28 @@
 import PackageDescription
 
 let package = Package(
-	name: "OpenScreenScreenCaptureKitHelper",
+	name: "ScreenlyScreenCaptureKitHelper",
 	platforms: [
 		.macOS(.v13)
 	],
 	products: [
 		.executable(
-			name: "openscreen-screencapturekit-helper",
-			targets: ["OpenScreenScreenCaptureKitHelper"]
+			name: "screenly-screencapturekit-helper",
+			targets: ["ScreenlyScreenCaptureKitHelper"]
 		),
 		.executable(
-			name: "openscreen-macos-cursor-helper",
-			targets: ["OpenScreenMacOSCursorHelper"]
+			name: "screenly-macos-cursor-helper",
+			targets: ["ScreenlyMacOSCursorHelper"]
 		)
 	],
 	targets: [
 		.executableTarget(
-			name: "OpenScreenScreenCaptureKitHelper",
-			path: "Sources/OpenScreenScreenCaptureKitHelper"
+			name: "ScreenlyScreenCaptureKitHelper",
+			path: "Sources/ScreenlyScreenCaptureKitHelper"
 		),
 		.executableTarget(
-			name: "OpenScreenMacOSCursorHelper",
-			path: "Sources/OpenScreenMacOSCursorHelper"
+			name: "ScreenlyMacOSCursorHelper",
+			path: "Sources/ScreenlyMacOSCursorHelper"
 		)
 	]
 )

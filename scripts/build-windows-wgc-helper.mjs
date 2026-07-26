@@ -110,7 +110,7 @@ async function runInVsEnv(command) {
 
 	const sdkUmLibDir = findWindowsSdkUmLibDir();
 
-	const cmdPath = path.join(os.tmpdir(), `openscreen-build-wgc-${process.pid}-${Date.now()}.cmd`);
+	const cmdPath = path.join(os.tmpdir(), `screenly-build-wgc-${process.pid}-${Date.now()}.cmd`);
 	fs.writeFileSync(
 		cmdPath,
 		[

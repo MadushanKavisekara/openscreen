@@ -23,7 +23,7 @@ interface I18nContextValue {
 	resolveSystemLocaleSuggestion: () => void;
 }
 
-const SYSTEM_LANGUAGE_PROMPT_SEEN_KEY = "openscreen-system-language-prompt-seen";
+const SYSTEM_LANGUAGE_PROMPT_SEEN_KEY = "screenly-system-language-prompt-seen";
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 

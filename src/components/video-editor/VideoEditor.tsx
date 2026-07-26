@@ -340,7 +340,7 @@ export default function VideoEditor() {
 
 	const { shortcuts, isMac } = useShortcuts();
 	// Windows recordings include captured cursor assets. macOS hides the system
-	// cursor in ScreenCaptureKit and renders telemetry samples with OpenScreen's
+	// cursor in ScreenCaptureKit and renders telemetry samples with Screenly's
 	// default arrow asset for the editable overlay.
 	const hasEditableCursorRecording =
 		recordingCursorCaptureMode === "editable-overlay" &&
@@ -2997,7 +2997,7 @@ export default function VideoEditor() {
 				{/* App name, centred on the window rather than between the side groups so it
 				    stays put regardless of what the left/right zones contain. */}
 				<span className="pointer-events-none absolute left-1/2 -translate-x-1/2 select-none text-[13px] font-semibold tracking-tight text-slate-300">
-					OpenScreen
+					Screenly
 				</span>
 
 				{/*

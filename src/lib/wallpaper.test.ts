@@ -283,7 +283,7 @@ describe("BackgroundLoadError", () => {
 	});
 
 	it("displayUrl hides parent directories to avoid leaking PII", () => {
-		const err = new BackgroundLoadError("file:///home/enrique/projects/openscreen/wallpaper1.jpg");
+		const err = new BackgroundLoadError("file:///home/enrique/projects/screenly/wallpaper1.jpg");
 		expect(err.displayUrl).toBe("wallpaper1.jpg");
 	});
 

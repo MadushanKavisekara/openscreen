@@ -2,7 +2,7 @@ import { info, warning } from "@actions/core";
 import { getOctokit } from "@actions/github";
 
 const ROLLING_NAME = "Next Release";
-const MARKER_PREFIX = "<!-- openscreen-rc-migrated:";
+const MARKER_PREFIX = "<!-- screenly-rc-migrated:";
 
 const token = (process.env.TOKEN || "").trim();
 const nextVersion = (process.env.NEXT || "").trim();
