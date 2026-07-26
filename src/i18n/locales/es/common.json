@@ -32,9 +32,9 @@
 		"zoomOut": "Alejar",
 		"toggleFullScreen": "Alternar pantalla completa",
 		"recordingStatus": "Grabando: {{source}}",
-		"about": "Acerca de OpenScreen",
+		"about": "Acerca de Screenly",
 		"services": "Servicios",
-		"hide": "Ocultar OpenScreen",
+		"hide": "Ocultar Screenly",
 		"hideOthers": "Ocultar otros",
 		"unhide": "Mostrar todo"
 	},

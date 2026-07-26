@@ -13,6 +13,9 @@ interface EditorEmptyStateProps {
 
 type DropError = "unsupported-format" | "load-failed" | null;
 
+/** `.openscreen` is the pre-rename extension; projects saved back then still open. */
+const PROJECT_FILE_EXTENSIONS = [".screenly", ".openscreen"];
+
 export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmptyStateProps) {
 	const te = useScopedT("editor");
 	const tc = useScopedT("common");
@@ -68,7 +71,9 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			const files = Array.from(e.dataTransfer.files);
 			if (files.length === 0) return;
 
-			const projectFile = files.find((f) => f.name.endsWith(".openscreen"));
+			const projectFile = files.find((f) =>
+				PROJECT_FILE_EXTENSIONS.some((ext) => f.name.toLowerCase().endsWith(ext)),
+			);
 			if (!projectFile) {
 				setDropError("unsupported-format");
 				return;

@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# OpenScreen macOS Build Script
-# Produces: release/<version>/OpenScreen-Mac-<arch>-<version>.dmg
+# Screenly macOS Build Script
+# Produces: release/<version>/Screenly-Mac-<arch>-<version>.dmg
 #
 # Usage: chmod +x scripts/build_macos.sh && ./scripts/build_macos.sh
 #

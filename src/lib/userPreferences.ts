@@ -5,7 +5,7 @@ import {
 import type { ExportFormat, ExportQuality } from "@/lib/exporter";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 
-const PREFS_KEY = "openscreen_user_preferences";
+const PREFS_KEY = "screenly_user_preferences";
 
 const VALID_ASPECT_RATIOS: readonly string[] = [
 	"16:9",

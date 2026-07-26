@@ -8,32 +8,31 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const HELPER_PATH =
-	process.env.OPENSCREEN_WGC_CAPTURE_EXE ??
+	process.env.SCREENLY_WGC_CAPTURE_EXE ??
 	path.join(ROOT, "electron", "native", "bin", "win32-x64", "wgc-capture.exe");
 
-const DURATION_MS = Number(process.env.OPENSCREEN_WGC_TEST_DURATION_MS ?? 5000);
+const DURATION_MS = Number(process.env.SCREENLY_WGC_TEST_DURATION_MS ?? 5000);
 const WITH_SYSTEM_AUDIO =
-	process.env.OPENSCREEN_WGC_TEST_SYSTEM_AUDIO === "true" ||
-	process.argv.includes("--system-audio");
+	process.env.SCREENLY_WGC_TEST_SYSTEM_AUDIO === "true" || process.argv.includes("--system-audio");
 const WITH_MICROPHONE =
-	process.env.OPENSCREEN_WGC_TEST_MICROPHONE === "true" ||
+	process.env.SCREENLY_WGC_TEST_MICROPHONE === "true" ||
 	process.argv.includes("--microphone") ||
 	process.argv.includes("--mic");
 const WITH_WINDOW =
-	process.env.OPENSCREEN_WGC_TEST_WINDOW === "true" || process.argv.includes("--window");
+	process.env.SCREENLY_WGC_TEST_WINDOW === "true" || process.argv.includes("--window");
 const WITH_WEBCAM =
-	process.env.OPENSCREEN_WGC_TEST_WEBCAM === "true" || process.argv.includes("--webcam");
+	process.env.SCREENLY_WGC_TEST_WEBCAM === "true" || process.argv.includes("--webcam");
 const CAPTURE_CURSOR =
-	process.env.OPENSCREEN_WGC_TEST_CAPTURE_CURSOR === "true" ||
+	process.env.SCREENLY_WGC_TEST_CAPTURE_CURSOR === "true" ||
 	process.argv.includes("--capture-cursor");
 const WITH_SOFTWARE_ENCODER =
-	process.env.OPENSCREEN_WGC_TEST_SOFTWARE_ENCODER === "true" ||
+	process.env.SCREENLY_WGC_TEST_SOFTWARE_ENCODER === "true" ||
 	process.argv.includes("--software-encoder");
 const WITH_SOFTWARE_FALLBACK =
-	process.env.OPENSCREEN_WGC_TEST_SOFTWARE_FALLBACK === "true" ||
+	process.env.SCREENLY_WGC_TEST_SOFTWARE_FALLBACK === "true" ||
 	process.argv.includes("--software-fallback");
 const INJECT_DEFAULT_SINK_WRITER_FAILURE_ENV =
-	"OPENSCREEN_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE";
+	"SCREENLY_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE";
 const INJECTION_MARKER = "TEST-ONLY: Injected default MFCreateSinkWriterFromURL failure";
 
 if (WITH_SOFTWARE_ENCODER && WITH_SOFTWARE_FALLBACK) {
@@ -247,7 +246,7 @@ if (!fs.existsSync(HELPER_PATH)) {
 
 const outputPath = path.join(
 	os.tmpdir(),
-	`openscreen-wgc-helper-${WITH_WEBCAM ? "webcam" : WITH_WINDOW ? "window" : WITH_SYSTEM_AUDIO || WITH_MICROPHONE ? "audio" : "video"}-${process.pid}-${Date.now()}-${randomUUID()}.mp4`,
+	`screenly-wgc-helper-${WITH_WEBCAM ? "webcam" : WITH_WINDOW ? "window" : WITH_SYSTEM_AUDIO || WITH_MICROPHONE ? "audio" : "video"}-${process.pid}-${Date.now()}-${randomUUID()}.mp4`,
 );
 const webcamOutputPath = WITH_WEBCAM ? outputPath.replace(/\.mp4$/i, "-webcam.mp4") : null;
 
@@ -272,14 +271,14 @@ const config = {
 	captureSystemAudio: WITH_SYSTEM_AUDIO,
 	captureMic: WITH_MICROPHONE,
 	captureCursor: CAPTURE_CURSOR,
-	microphoneDeviceId: process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID ?? "default",
-	microphoneDeviceName: process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME ?? "",
+	microphoneDeviceId: process.env.SCREENLY_WGC_TEST_MICROPHONE_DEVICE_ID ?? "default",
+	microphoneDeviceName: process.env.SCREENLY_WGC_TEST_MICROPHONE_DEVICE_NAME ?? "",
 	microphoneGain: 1.4,
 	webcamEnabled: WITH_WEBCAM,
-	webcamDeviceId: process.env.OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_ID ?? "",
-	webcamDeviceName: process.env.OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME ?? "",
+	webcamDeviceId: process.env.SCREENLY_WGC_TEST_WEBCAM_DEVICE_ID ?? "",
+	webcamDeviceName: process.env.SCREENLY_WGC_TEST_WEBCAM_DEVICE_NAME ?? "",
 	webcamDirectShowClsid: resolveDirectShowWebcamClsid(
-		process.env.OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME ?? "",
+		process.env.SCREENLY_WGC_TEST_WEBCAM_DEVICE_NAME ?? "",
 	),
 	webcamWidth: 640,
 	webcamHeight: 360,

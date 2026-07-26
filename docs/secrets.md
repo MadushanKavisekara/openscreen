@@ -1,10 +1,10 @@
 # Secrets and tokens
 
-OpenScreen uses a small set of GitHub Actions secrets and repository variables. This file documents what each one does and how to create or rotate it.
+Screenly uses a small set of GitHub Actions secrets and repository variables. This file documents what each one does and how to create or rotate it.
 
 ## Required for releases
 
-### `OPENSCREEN_RELEASE_TOKEN`
+### `SCREENLY_RELEASE_TOKEN`
 
 A **fine-grained personal access token** used by the release pipeline (`build.yml#publish-release`, `prerelease.yml`, `promote.yml`) for the actions that `GITHUB_TOKEN` cannot perform reliably:
 
@@ -19,8 +19,8 @@ Most of the repo's workflows (CI, build, Tier 3 publishers, Discord sync) only n
 **How to create it:**
 
 1. Go to <https://github.com/settings/tokens?type=beta> (fine-grained PATs).
-2. **Resource owner**: `getopenscreen` (only this org — do not grant access to personal repos).
-3. **Repository access**: `getopenscreen/openscreen` only.
+2. **Resource owner**: `MadushanKavisekara` (only this org — do not grant access to personal repos).
+3. **Repository access**: `MadushanKavisekara/screenly` only.
 4. **Permissions**:
    - `Contents`: Read and write
    - `Issues`: Read and write
@@ -32,9 +32,9 @@ Most of the repo's workflows (CI, build, Tier 3 publishers, Discord sync) only n
 6. Generate the token, copy it once, then add it as a repository secret. The `gh` CLI does **not** accept the value as a positional argument — use `--body` or stdin:
    ```bash
    # Either:
-   gh secret set OPENSCREEN_RELEASE_TOKEN --body "ghp_xxxxxxxxxxxxxxxxxxxx" --repo getopenscreen/openscreen
+   gh secret set SCREENLY_RELEASE_TOKEN --body "ghp_xxxxxxxxxxxxxxxxxxxx" --repo MadushanKavisekara/screenly
    # Or:
-   echo "ghp_xxxxxxxxxxxxxxxxxxxx" | gh secret set OPENSCREEN_RELEASE_TOKEN --repo getopenscreen/openscreen
+   echo "ghp_xxxxxxxxxxxxxxxxxxxx" | gh secret set SCREENLY_RELEASE_TOKEN --repo MadushanKavisekara/screenly
    ```
 7. Verify by triggering a test `workflow_dispatch` on `prerelease.yml` with `bump=patch`, `rc_number=99` against an empty milestone, then revert the resulting `package.json` bump PR/commit.
 
@@ -74,7 +74,7 @@ The release pipeline (`prerelease.yml` and `promote.yml`) cannot bypass this dir
 So the workflow:
 
 1. Pushes the bump commit to a `release/vX.Y.Z` branch using the PAT (no rule check on non-main branches).
-2. Opens the PR using the PAT (`gh pr create` with `GH_TOKEN=$OPENSCREEN_RELEASE_TOKEN`).
+2. Opens the PR using the PAT (`gh pr create` with `GH_TOKEN=$SCREENLY_RELEASE_TOKEN`).
 3. Rebase-merges the PR using the PAT. EtienneLescot is a ruleset bypass actor with `bypass_mode: "always"`, so the `pull_request` review requirement is skipped for this merge.
 
 The ruleset has two bypass actors:
@@ -85,7 +85,7 @@ The ruleset has two bypass actors:
 To confirm the bypass list:
 
 ```bash
-gh api /repos/getopenscreen/openscreen/rulesets/18060803 --jq '.bypass_actors'
+gh api /repos/MadushanKavisekara/screenly/rulesets/18060803 --jq '.bypass_actors'
 # Expect both 215859519 and 41898282 with bypass_mode "always".
 ```
 
@@ -93,7 +93,7 @@ gh api /repos/getopenscreen/openscreen/rulesets/18060803 --jq '.bypass_actors'
 
 ### `DISCORD_BOT_TOKEN`
 
-Bot token from a Discord application added to the OpenScreen Discord server with the `bot` scope and at minimum:
+Bot token from a Discord application added to the Screenly Discord server with the `bot` scope and at minimum:
 
 - `Send Messages` in any text channels where the bot posts
 - `Create Public Threads` in the forum channels (for the release announce script)
@@ -113,7 +113,7 @@ Snowflake ID of the Discord channel where release candidates are announced. Can 
 Set as a **repository variable** (not a secret — it's not sensitive):
 
 ```bash
-gh variable set DISCORD_RC_TESTING_CHANNEL_ID --body "1521416826146263051" --repo getopenscreen/openscreen
+gh variable set DISCORD_RC_TESTING_CHANNEL_ID --body "1521416826146263051" --repo MadushanKavisekara/screenly
 ```
 
 ### `DISCORD_RELEASE_CHANNEL_ID`
@@ -121,7 +121,7 @@ gh variable set DISCORD_RC_TESTING_CHANNEL_ID --body "1521416826146263051" --rep
 Same pattern as above, for the stable release announcement channel.
 
 ```bash
-gh variable set DISCORD_RELEASE_CHANNEL_ID --body "<id>" --repo getopenscreen/openscreen
+gh variable set DISCORD_RELEASE_CHANNEL_ID --body "<id>" --repo MadushanKavisekara/screenly
 ```
 
 ### `DISCORD_ROADMAP_CHANNEL_ID` and `DISCORD_ROADMAP_MESSAGE_ID`

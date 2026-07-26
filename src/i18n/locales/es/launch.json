@@ -54,13 +54,13 @@
 	"language": "Idioma",
 	"systemLanguagePrompt": {
 		"title": "¿Usar el idioma del sistema?",
-		"description": "Detectamos {{language}} como idioma de tu sistema. ¿Quieres cambiar OpenScreen a {{language}}?",
+		"description": "Detectamos {{language}} como idioma de tu sistema. ¿Quieres cambiar Screenly a {{language}}?",
 		"switch": "Cambiar a {{language}}",
 		"keepDefault": "Mantener idioma actual"
 	},
 	"softwareEncoderFallback": {
 		"title": "Se cambió a codificación por software",
-		"description": "El codificador GPU predeterminado no pudo iniciarse, por lo que OpenScreen pasó a la codificación H.264 por software. La grabación debería continuar con normalidad, pero el uso de CPU puede ser mayor.",
+		"description": "El codificador GPU predeterminado no pudo iniciarse, por lo que Screenly pasó a la codificación H.264 por software. La grabación debería continuar con normalidad, pero el uso de CPU puede ser mayor.",
 		"dismiss": "Entendido",
 		"dontShowAgain": "No volver a mostrar"
 	}

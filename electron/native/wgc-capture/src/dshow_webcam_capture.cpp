@@ -160,7 +160,7 @@ bool DirectShowWebcamCapture::initialize(
     if (!succeeded(impl_->captureGraph->SetFiltergraph(impl_->graph.Get()), "SetFiltergraph(DirectShow webcam)")) {
         return false;
     }
-    if (!succeeded(impl_->graph->AddFilter(impl_->captureFilter.Get(), L"OpenScreen Webcam Source"),
+    if (!succeeded(impl_->graph->AddFilter(impl_->captureFilter.Get(), L"Screenly Webcam Source"),
                    "AddFilter(DirectShow webcam source)")) {
         return false;
     }
@@ -180,7 +180,7 @@ bool DirectShowWebcamCapture::initialize(
         return false;
     }
 
-    if (!succeeded(impl_->graph->AddFilter(impl_->sampleGrabberFilter.Get(), L"OpenScreen Webcam Sample Grabber"),
+    if (!succeeded(impl_->graph->AddFilter(impl_->sampleGrabberFilter.Get(), L"Screenly Webcam Sample Grabber"),
                    "AddFilter(SampleGrabber)")) {
         return false;
     }
@@ -188,7 +188,7 @@ bool DirectShowWebcamCapture::initialize(
                    "CoCreateInstance(NullRenderer)")) {
         return false;
     }
-    if (!succeeded(impl_->graph->AddFilter(impl_->nullRenderer.Get(), L"OpenScreen Webcam Null Renderer"),
+    if (!succeeded(impl_->graph->AddFilter(impl_->nullRenderer.Get(), L"Screenly Webcam Null Renderer"),
                    "AddFilter(NullRenderer)")) {
         return false;
     }

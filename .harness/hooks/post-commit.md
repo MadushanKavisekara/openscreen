@@ -4,7 +4,7 @@ event: post-commit
 type: reminder
 ---
 
-# Post-commit reminder for OpenScreen
+# Post-commit reminder for Screenly
 
 Runs after every successful `git commit`. Goal: nudge the dev toward the next step without blocking.
 
@@ -14,7 +14,7 @@ Prints a single reminder line summarizing:
 
 - Number of commits ahead of `main` on the current branch.
 - Whether the current branch has been pushed (`git status` reports `Your branch is up to date with 'origin/<branch>'` if pushed).
-- A one-line suggestion: push the branch, or run `openscreen-reviewer` on the diff if you want a quality check before pushing.
+- A one-line suggestion: push the branch, or run `screenly-reviewer` on the diff if you want a quality check before pushing.
 
 ## What it does NOT do
 

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const LOCK_DIR_PREFIX = "openscreen-single-instance";
+const LOCK_DIR_PREFIX = "screenly-single-instance";
 const PID_FILE_NAME = "pid";
 const EMPTY_LOCK_STALE_MS = 30_000;
 

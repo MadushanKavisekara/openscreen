@@ -11,11 +11,11 @@ macOS native recording will use a ScreenCaptureKit helper with the same process 
 
 Helper locations:
 
-1. `OPENSCREEN_SCK_CAPTURE_EXE`, for local development and diagnostics.
-2. `electron/native/screencapturekit/build/openscreen-screencapturekit-helper`, for locally built Swift output.
-3. `electron/native/bin/darwin-arm64/openscreen-screencapturekit-helper` or `electron/native/bin/darwin-x64/openscreen-screencapturekit-helper`, for packaged prebuilt helpers.
+1. `SCREENLY_SCK_CAPTURE_EXE`, for local development and diagnostics.
+2. `electron/native/screencapturekit/build/screenly-screencapturekit-helper`, for locally built Swift output.
+3. `electron/native/bin/darwin-arm64/screenly-screencapturekit-helper` or `electron/native/bin/darwin-x64/screenly-screencapturekit-helper`, for packaged prebuilt helpers.
 
-The macOS cursor-shape helper is resolved from `OPENSCREEN_MAC_CURSOR_HELPER_EXE` first, then the matching `openscreen-macos-cursor-helper` binary in the same local build and packaged `electron/native/bin/darwin-${arch}` directories.
+The macOS cursor-shape helper is resolved from `SCREENLY_MAC_CURSOR_HELPER_EXE` first, then the matching `screenly-macos-cursor-helper` binary in the same local build and packaged `electron/native/bin/darwin-${arch}` directories.
 
 Build the macOS helper with:
 
@@ -35,7 +35,7 @@ See `docs/engineering/macos-native-recorder-roadmap.md` for the contract, rollou
 
 Windows native recording is resolved from one of these locations:
 
-1. `OPENSCREEN_WGC_CAPTURE_EXE`, for local development and diagnostics.
+1. `SCREENLY_WGC_CAPTURE_EXE`, for local development and diagnostics.
 2. `electron/native/wgc-capture/build/wgc-capture.exe`, for a locally built Ninja helper.
 3. `electron/native/wgc-capture/build/Release/wgc-capture.exe`, for a locally built multi-config helper.
 4. `electron/native/bin/win32-x64/wgc-capture.exe` or `electron/native/bin/win32-arm64/wgc-capture.exe`, for packaged prebuilt helpers.
@@ -84,7 +84,7 @@ Current V2 JSON shape:
 
 The current helper implementation supports display/window video capture, system audio loopback, selected-microphone capture, Media Foundation webcam capture, and a DirectShow webcam fallback for virtual cameras that are not exposed through Media Foundation. Webcam frames are currently composed into the primary MP4 as a bottom-right picture-in-picture overlay. Browser `deviceId` values do not always map to Media Foundation symbolic links or WASAPI endpoint IDs, so the renderer passes both browser IDs and user-visible device names. For microphones, the helper tries the requested WASAPI endpoint ID first, then resolves an active capture endpoint by `microphoneDeviceName`, then falls back to the default endpoint. For webcams, Electron resolves a matching DirectShow filter CLSID for the selected label; the helper uses Media Foundation first, then that exact DirectShow filter when the requested camera is absent from Media Foundation.
 
-Encoder selection: by default the helper keeps the existing sink-writer path first. If that path fails while setting up H.264, it retries with the Microsoft software H.264 encoder (`mfh264enc.dll`). The key of this retry is registering that encoder locally in the helper process via `MFTRegisterLocalByCLSID`, which makes a software H.264 encoder available even when the machine's hardware encoders are missing or broken; hardware transforms are disabled for the retry only as a secondary guard so the sink writer prefers the locally registered software encoder, not as the fallback mechanism itself. Set `preferSoftwareEncoder: true` in the helper JSON, or set `OPENSCREEN_WGC_PREFER_SOFTWARE_ENCODER=true` before launching Electron, to force the software path from the first attempt.
+Encoder selection: by default the helper keeps the existing sink-writer path first. If that path fails while setting up H.264, it retries with the Microsoft software H.264 encoder (`mfh264enc.dll`). The key of this retry is registering that encoder locally in the helper process via `MFTRegisterLocalByCLSID`, which makes a software H.264 encoder available even when the machine's hardware encoders are missing or broken; hardware transforms are disabled for the retry only as a secondary guard so the sink writer prefers the locally registered software encoder, not as the fallback mechanism itself. Set `preferSoftwareEncoder: true` in the helper JSON, or set `SCREENLY_WGC_PREFER_SOFTWARE_ENCODER=true` before launching Electron, to force the software path from the first attempt.
 
 The helper reports the outcome through the `encoder-selection` stdout event (`video` is `default`, `software-preferred`, or `software-fallback`). When the app sees `software-fallback` — the default encoder failed and the helper switched on its own — it shows a small dismissible notice in the recording HUD with a "Don't show again" option, because software encoding can raise CPU usage. An explicit `software-preferred` selection shows no notice, and the event stays available for diagnostics either way.
 
@@ -106,7 +106,7 @@ npm run test:wgc-webcam:win
 `--software-encoder` keeps testing the explicit `software-preferred` path with
 `preferSoftwareEncoder: true`. `--software-fallback` keeps
 `preferSoftwareEncoder: false` and sets
-`OPENSCREEN_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE=1` only for the helper
+`SCREENLY_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE=1` only for the helper
 child process. At the first default/non-software `MFCreateSinkWriterFromURL` call, the
 helper returns `HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND)` (`0x80070003`) exactly once.
 The existing retry then performs the real local Microsoft software H.264 MFT registration,
@@ -117,9 +117,9 @@ For a full-application test, set the same test-only variable before launching El
 remove it afterward:
 
 ```powershell
-$env:OPENSCREEN_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE = "1"
+$env:SCREENLY_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE = "1"
 npm run dev
-Remove-Item Env:OPENSCREEN_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE
+Remove-Item Env:SCREENLY_WGC_TEST_INJECT_DEFAULT_SINK_WRITER_FAILURE_ONCE
 ```
 
 Only the exact value `1` enables this native test hook. It is not a preference or UI option,
@@ -131,15 +131,15 @@ with a genuinely broken GPU driver or naturally missing hardware H.264 MFT.
 To validate a specific native webcam manually:
 
 ```powershell
-$env:OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME = "NVIDIA Broadcast"
+$env:SCREENLY_WGC_TEST_WEBCAM_DEVICE_NAME = "NVIDIA Broadcast"
 npm run test:wgc-webcam:win
-Remove-Item Env:OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME
+Remove-Item Env:SCREENLY_WGC_TEST_WEBCAM_DEVICE_NAME
 ```
 
 To validate a specific native microphone manually:
 
 ```powershell
-$env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME = "Microphone (NVIDIA Broadcast)"
+$env:SCREENLY_WGC_TEST_MICROPHONE_DEVICE_NAME = "Microphone (NVIDIA Broadcast)"
 npm run test:wgc-mic:win
-Remove-Item Env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME
+Remove-Item Env:SCREENLY_WGC_TEST_MICROPHONE_DEVICE_NAME
 ```

@@ -105,7 +105,7 @@ const isMac = process.platform === "darwin";
 const trayIconSize = isMac ? 16 : 24;
 
 // Tray Icons
-const defaultTrayIcon = getTrayIcon("openscreen.png", trayIconSize);
+const defaultTrayIcon = getTrayIcon("screenly.png", trayIconSize);
 const recordingTrayIcon = getTrayIcon("rec-button.png", trayIconSize);
 
 function createWindow() {
@@ -162,7 +162,7 @@ function applyLocaleFromMenu(locale: string) {
 	updateTrayMenu();
 }
 
-const GITHUB_REPO_URL = "https://github.com/EtienneLescot/openscreen";
+const GITHUB_REPO_URL = "https://github.com/MadushanKavisekara/screenly";
 const GITHUB_NEW_ISSUE_URL = `${GITHUB_REPO_URL}/issues/new/choose`;
 
 function sendEditorMenuAction(
@@ -201,7 +201,7 @@ function setupApplicationMenu() {
 			submenu: [
 				{
 					role: "about",
-					label: mainT("common", "actions.about") || "About OpenScreen",
+					label: mainT("common", "actions.about") || "About Screenly",
 				},
 				{ type: "separator" },
 				{
@@ -211,7 +211,7 @@ function setupApplicationMenu() {
 				{ type: "separator" },
 				{
 					role: "hide",
-					label: mainT("common", "actions.hide") || "Hide OpenScreen",
+					label: mainT("common", "actions.hide") || "Hide Screenly",
 				},
 				{
 					role: "hideOthers",
@@ -407,7 +407,7 @@ function updateTrayMenu(recording: boolean = false) {
 		? mainT("common", "actions.recordingStatus", {
 				source: selectedSourceName,
 			}) || `Recording: ${selectedSourceName}`
-		: "OpenScreen";
+		: "Screenly";
 	const menuTemplate = recording
 		? [
 				{
@@ -578,7 +578,7 @@ const appReady = hasSingleInstanceLock ? app.whenReady() : null;
 appReady?.then(async () => {
 	if (isDiagnosticModeEnabled()) {
 		mainLogBuffer.install();
-		console.info("[diagnostic] OPENSCREEN_DIAGNOSTIC=1, capturing console.* into ring buffer");
+		console.info("[diagnostic] SCREENLY_DIAGNOSTIC=1, capturing console.* into ring buffer");
 	}
 
 	// Force "regular" activation policy so the Dock icon appears. The HUD overlay

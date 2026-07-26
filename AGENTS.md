@@ -1,6 +1,6 @@
 # AGENTS.md
 
-OpenScreen is a free, open-source screen recorder and video editor (Electron + React + TypeScript + Pixi.js) maintained as a continuation of the original v1.5.0 release. This file is the canonical guide for any AI coding agent working in this repo.
+Screenly is a free, open-source screen recorder and video editor (Electron + React + TypeScript + Pixi.js) maintained as a continuation of the original v1.5.0 release. This file is the canonical guide for any AI coding agent working in this repo.
 
 ## Setup commands
 
@@ -50,12 +50,12 @@ Unit/browser tests can't exercise real capture (native screen recording, a physi
 **Launch the app**
 
 - Normal: `npm run dev` — Vite serves the renderer and `vite-plugin-electron` opens the Electron window. The main process logs `Global shortcut registered: CommandOrControl+Shift+O` when ready (Ctrl/Cmd+Shift+O toggles the HUD).
-- The app is single-instance: a lock dir at `%TEMP%/openscreen-single-instance-<user>.lock` (macOS: `$TMPDIR`). If a stale Electron process holds it, a new launch quits silently (exit 0, no window). Kill leftover `electron` processes and delete that lock dir before relaunching.
+- The app is single-instance: a lock dir at `%TEMP%/screenly-single-instance-<user>.lock` (macOS: `$TMPDIR`). If a stale Electron process holds it, a new launch quits silently (exit 0, no window). Kill leftover `electron` processes and delete that lock dir before relaunching.
 - **From a git worktree** (no `node_modules`/native binaries): junction/symlink `node_modules` from the main checkout (deps are usually identical — check `package-lock.json`), and copy the prebuilt native capture binaries from `electron/native/bin/<platform>/` (gitignored — rebuilding needs the full VS/Xcode toolchain). Then `npm run dev` works normally.
 
 **Granting access**
 
-- `request_access` resolves names against installed apps. A **dev build runs as `electron.exe`** (or `Electron.app`), *not* the installed `Openscreen` — grant **`electron.exe`** or the dev window stays masked in screenshots. Non-allowlisted windows are masked (solid rectangles); the screenshot note lists their process names to add.
+- `request_access` resolves names against installed apps. A **dev build runs as `electron.exe`** (or `Electron.app`), *not* the installed `Screenly` — grant **`electron.exe`** or the dev window stays masked in screenshots. Non-allowlisted windows are masked (solid rectangles); the screenshot note lists their process names to add.
 
 **The HUD widget** (recording controller)
 
@@ -65,7 +65,7 @@ Unit/browser tests can't exercise real capture (native screen recording, a physi
 **The tray icon** (bottom-right notification area)
 
 - Because the HUD skips the taskbar and can be minimized/hidden, the **system-tray icon is the reliable way to refocus the app**: **left-click or double-click reopens/focuses the HUD** (`showMainWindow`). Its icon swaps to a red dot while recording.
-- **Right-click → context menu**: *Open* / *Quit* when idle, or ***Stop Recording*** while recording (mirrors the HUD's stop). Tooltip shows `OpenScreen` or `Recording: <source>`. Use this to stop a recording if the HUD isn't reachable.
+- **Right-click → context menu**: *Open* / *Quit* when idle, or ***Stop Recording*** while recording (mirrors the HUD's stop). Tooltip shows `Screenly` or `Recording: <source>`. Use this to stop a recording if the HUD isn't reachable.
 
 **End-to-end flow (record → edit)**
 
@@ -91,7 +91,7 @@ Two `workflow_dispatch` workflows cut a release with a pre-release candidate (RC
 - **Promote RC**: Actions → "Promote RC to stable release" → Run workflow. Input: `rc_tag` (e.g. `v1.5.0-rc.2`), optional `release_notes_extra`. Closes the `vX.Y.Z` milestone, strips `-rc.N` from `package.json`, pushes `vX.Y.Z` tag, which triggers `build.yml` to publish a stable release (full notarization, Tier 3 homebrew/winget/nix/aur fires). Notifies `#announcements` on Discord.
 - **Manual fallback**: `git tag vX.Y.Z-rc.N <sha> && git push origin vX.Y.Z-rc.N` does the same as Cut RC (minus the milestone migration and Discord announce) — useful for emergency cuts.
 
-Both workflows require the `OPENSCREEN_RELEASE_TOKEN` secret (a fine-grained PAT with `contents: write` + `issues: write`). This is the standard fix for `release: published` not triggering downstream workflows when the release is created by `GITHUB_TOKEN`. See `docs/secrets.md`.
+Both workflows require the `SCREENLY_RELEASE_TOKEN` secret (a fine-grained PAT with `contents: write` + `issues: write`). This is the standard fix for `release: published` not triggering downstream workflows when the release is created by `GITHUB_TOKEN`. See `docs/secrets.md`.
 
 **Release branches freeze the build between cut and promote.** Every RC cut creates `release/vX.Y.Z-rc.N`. The branch is *not* merged into `main` until the stable tag is published; only cherry-picks of bugfixes land on the release branch during the RC window. The stable tag points at the branch tip (RC + cherry-picks), then `promote.yml` opens a `release/vX.Y.Z-sync → main` PR to bring main into line. This contract exists because of the v1.6.0 incident (2026-07-05) where the original promote workflow tagged `main` instead of the RC snapshot, causing 23 unreleased commits to ship in `v1.6.0`. Full rules in `.harness/docs/git-workflow.md` § Release branches.
 

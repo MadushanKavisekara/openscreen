@@ -144,12 +144,12 @@ vi.mock("@/contexts/I18nContext", () => ({
 			language: "Language",
 			"systemLanguagePrompt.title": "Use your system language?",
 			"systemLanguagePrompt.description":
-				"We detected English as your system language. Do you want to switch OpenScreen to English?",
+				"We detected English as your system language. Do you want to switch Screenly to English?",
 			"systemLanguagePrompt.keepDefault": "Keep current language",
 			"systemLanguagePrompt.switch": "Switch to English",
 			"softwareEncoderFallback.title": "Switched to software encoding",
 			"softwareEncoderFallback.description":
-				"The default GPU encoder failed to start, so OpenScreen fell back to software H.264 encoding. Recording should continue as normal, but CPU usage may be higher.",
+				"The default GPU encoder failed to start, so Screenly fell back to software H.264 encoding. Recording should continue as normal, but CPU usage may be higher.",
 			"softwareEncoderFallback.dismiss": "Got it",
 			"softwareEncoderFallback.dontShowAgain": "Don't show again",
 		};

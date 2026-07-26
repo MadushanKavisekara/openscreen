@@ -68,12 +68,12 @@
 		"saveGif": "Save Exported GIF",
 		"saveVideo": "Save Exported Video",
 		"selectVideo": "Select Video File",
-		"saveProject": "Save OpenScreen Project",
-		"openProject": "Open OpenScreen Project",
+		"saveProject": "Save Screenly Project",
+		"openProject": "Open Screenly Project",
 		"gifImage": "GIF Image",
 		"mp4Video": "MP4 Video",
 		"videoFiles": "Video Files",
-		"openscreenProject": "OpenScreen Project",
+		"screenlyProject": "Screenly Project",
 		"allFiles": "All Files"
 	}
 }

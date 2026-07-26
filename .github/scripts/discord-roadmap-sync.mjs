@@ -2,7 +2,7 @@ import { info, warning } from "@actions/core";
 import { context, getOctokit } from "@actions/github";
 
 const ROADMAP_PATTERN = /(^|\/)ROADMAP\.md$|(^|\/)docs\/roadmap\.md$/i;
-const ROADMAP_EMBED_TITLE = "🗺️ OpenScreen Roadmap";
+const ROADMAP_EMBED_TITLE = "🗺️ Screenly Roadmap";
 
 const botToken = (process.env.DISCORD_BOT_TOKEN || "").trim();
 const channelId = (process.env.DISCORD_ROADMAP_CHANNEL_ID || "").trim();

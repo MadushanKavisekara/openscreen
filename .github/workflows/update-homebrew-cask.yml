@@ -20,7 +20,7 @@ jobs:
     env:
       TAP_OWNER: ${{ vars.HOMEBREW_TAP_OWNER }}
       TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
-      CASK_NAME: ${{ vars.HOMEBREW_CASK_NAME || 'openscreen' }}
+      CASK_NAME: ${{ vars.HOMEBREW_CASK_NAME || 'screenly' }}
     steps:
       - name: Resolve tag and version
         id: meta
@@ -49,8 +49,8 @@ jobs:
           POLL_INTERVAL=30
           MAX_ATTEMPTS=$(( (TIMEOUT_MINUTES * 60) / POLL_INTERVAL ))
           VERSION="${TAG#v}"
-          ARM_DMG="Openscreen-Mac-arm64-${VERSION}.dmg"
-          X64_DMG="Openscreen-Mac-x64-${VERSION}.dmg"
+          ARM_DMG="Screenly-Mac-arm64-${VERSION}.dmg"
+          X64_DMG="Screenly-Mac-x64-${VERSION}.dmg"
 
           for i in $(seq 1 $MAX_ATTEMPTS); do
             if gh release view "$TAG" --repo "$REPO" --json assets --jq \
@@ -158,21 +158,21 @@ jobs:
               url "https://github.com/${REPO}/releases/download/v#{version}/${X64_NAME}"
             end
 
-            name "Openscreen"
+            name "Screenly"
             desc "Screen recorder and video editor"
             homepage "https://github.com/${REPO}"
 
             auto_updates false
             depends_on macos: ">= :big_sur"
 
-            app "Openscreen.app"
+            app "Screenly.app"
 
             zap trash: [
-              "~/Library/Application Support/Openscreen",
-              "~/Library/Caches/com.etiennelescot.openscreen",
-              "~/Library/Logs/Openscreen",
-              "~/Library/Preferences/com.etiennelescot.openscreen.plist",
-              "~/Library/Saved Application State/com.etiennelescot.openscreen.savedState",
+              "~/Library/Application Support/Screenly",
+              "~/Library/Caches/com.madushankavisekara.screenly",
+              "~/Library/Logs/Screenly",
+              "~/Library/Preferences/com.madushankavisekara.screenly.plist",
+              "~/Library/Saved Application State/com.madushankavisekara.screenly.savedState",
             ]
           end
           EOF

@@ -19,7 +19,7 @@ jobs:
         with:
           identifier: ${{ vars.WINGET_IDENTIFIER }}
           # Matches the Windows installer asset attached to each release,
-          # e.g. "Openscreen.Setup.1.5.0.exe".
+          # e.g. "Screenly.Setup.1.5.0.exe".
           installers-regex: 'Setup\..*\.exe$'
           release-tag: ${{ inputs.tag || github.event.release.tag_name }}
           token: ${{ secrets.WINGET_ACC_TOKEN }}

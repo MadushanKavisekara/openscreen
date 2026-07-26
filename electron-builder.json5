@@ -1,13 +1,13 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "com.etiennelescot.openscreen",
+  "appId": "com.madushankavisekara.screenly",
   "asar": true,
   // .node binaries can't be dlopen'd from inside an asar — must live unpacked.
   "asarUnpack": [
     "**/*.node"
   ],
-  "productName": "Openscreen",
+  "productName": "Screenly",
   // Fetch the auto-caption model + ORT wasm into caption-assets/ before packaging (idempotent).
   "beforePack": "scripts/before-pack.cjs",
   "npmRebuild": true,
@@ -67,10 +67,10 @@
       }
     ],
     "extendInfo": {
-      "NSAudioCaptureUsageDescription": "OpenScreen needs audio capture permission to record system audio.",
-      "NSMicrophoneUsageDescription": "OpenScreen needs microphone access to record voice audio.",
-      "NSCameraUsageDescription": "OpenScreen needs camera access to record webcam video.",
-      "NSScreenCaptureUsageDescription": "OpenScreen needs screen recording permission to detect and capture windows.",
+      "NSAudioCaptureUsageDescription": "Screenly needs audio capture permission to record system audio.",
+      "NSMicrophoneUsageDescription": "Screenly needs microphone access to record voice audio.",
+      "NSCameraUsageDescription": "Screenly needs camera access to record webcam video.",
+      "NSScreenCaptureUsageDescription": "Screenly needs screen recording permission to detect and capture windows.",
       "NSCameraUseContinuityCameraDeviceType": true
     }
   },
@@ -104,13 +104,13 @@
     "allowToChangeInstallationDirectory": true
   },
   // Microsoft Store packaging identity, from Partner Center's "Product identity" page
-  // (Applications et jeux > OpenScreen > Product identity).
+  // (Applications et jeux > Screenly > Product identity).
   "appx": {
-    "identityName": "EtienneLescot.OpenScreen",
+    "identityName": "MadushanKavisekara.Screenly",
     "publisher": "CN=03B0FC8C-2067-45D9-BE82-9F15CE264B4A",
     "publisherDisplayName": "Etienne Lescot",
-    "applicationId": "Openscreen",
-    "displayName": "OpenScreen",
+    "applicationId": "Screenly",
+    "displayName": "Screenly",
     "backgroundColor": "transparent",
     "capabilities": ["runFullTrust", "microphone", "webcam"],
     "languages": ["en-US", "fr-FR"],

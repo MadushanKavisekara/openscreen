@@ -65,12 +65,12 @@
 		"saveGif": "حفظ GIF المصدر",
 		"saveVideo": "حفظ الفيديو المصدر",
 		"selectVideo": "حدد ملف فيديو",
-		"saveProject": "حفظ مشروع OpenScreen",
-		"openProject": "فتح مشروع OpenScreen",
+		"saveProject": "حفظ مشروع Screenly",
+		"openProject": "فتح مشروع Screenly",
 		"gifImage": "صورة GIF",
 		"mp4Video": "فيديو MP4",
 		"videoFiles": "ملفات فيديو",
-		"openscreenProject": "مشروع OpenScreen",
+		"screenlyProject": "مشروع Screenly",
 		"allFiles": "جميع الملفات"
 	}
 }

@@ -1,4 +1,4 @@
-# Git Workflow for OpenScreen
+# Git Workflow for Screenly
 
 Conventions for the Mavis reins when working in this repo.
 
@@ -36,12 +36,12 @@ All five must be green before merge. Native helper code is NOT covered by CI —
 2. Implement + add tests in the same package.
 3. Run locally: `npm run lint && npx tsc --noEmit && npm run test`. For browser/e2e-touching changes, also run the relevant suite.
 4. Push and open the PR via `gh pr create`. Use `.github/pull_request_template.md`.
-5. Wait for the Mavis reviewer (`openscreen-reviewer`) PASS or address the requested changes.
+5. Wait for the Mavis reviewer (`screenly-reviewer`) PASS or address the requested changes.
 6. Merge once CI is green and review is PASS. PR titles must follow Conventional Commits (enforced by the `semantic-pr` job in `ci.yml`) — this keeps the auto-generated release notes clean.
 
 ## Release flow
 
-Two `workflow_dispatch` workflows cut a release. Trunk-based on `main`, but **release branches freeze the RC codebase between cut and promote** (see § Release branches below). Both require the `OPENSCREEN_RELEASE_TOKEN` secret — see `docs/secrets.md`.
+Two `workflow_dispatch` workflows cut a release. Trunk-based on `main`, but **release branches freeze the RC codebase between cut and promote** (see § Release branches below). Both require the `SCREENLY_RELEASE_TOKEN` secret — see `docs/secrets.md`.
 
 ### Step 1: cut a release candidate
 
@@ -81,7 +81,7 @@ The workflow:
 1. Validates the tag matches `^vX.Y.Z-(rc|beta|alpha)\.N$`.
 2. Closes the `vX.Y.Z` milestone (snapshotting it for the release notes).
 3. Checks out `release/vX.Y.Z-rc.N` (the frozen branch), strips `-rc.N` from `package.json`, and commits the bump there. The stable tag points at this tip — the released code is the exact RC + cherry-picks.
-4. Pushes the tag `vX.Y.Z` and triggers `build.yml` (full notarization). The `release: published` event fires Tier 3 (homebrew/winget/nix/aur) thanks to `OPENSCREEN_RELEASE_TOKEN`.
+4. Pushes the tag `vX.Y.Z` and triggers `build.yml` (full notarization). The `release: published` event fires Tier 3 (homebrew/winget/nix/aur) thanks to `SCREENLY_RELEASE_TOKEN`.
 5. Opens a **release-sync PR** (e.g. `release/v1.6.0-sync → main`) that brings `main` into line with the released snapshot. Rebase-merged via PAT (EtienneLescot is a ruleset bypass actor).
 6. Posts in `#announcements` on Discord with the release notes + a "Closed issues in this release" list pulled from the milestone.
 

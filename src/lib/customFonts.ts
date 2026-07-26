@@ -7,7 +7,7 @@ export interface CustomFont {
 	importUrl: string; // Google Fonts @import URL
 }
 
-const STORAGE_KEY = "openscreen_custom_fonts";
+const STORAGE_KEY = "screenly_custom_fonts";
 const loadedFonts = new Set<string>();
 
 export function getCustomFonts(): CustomFont[] {

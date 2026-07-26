@@ -149,7 +149,7 @@ function stubOpfs(root: FakeDir) {
 }
 
 function cacheDir(root: FakeDir): FakeDir | undefined {
-	return root.subdirs.get("openscreen-source-cache");
+	return root.subdirs.get("screenly-source-cache");
 }
 
 /** electronAPI whose readFileChunk serves slices of `source`. */

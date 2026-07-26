@@ -32,7 +32,7 @@ import { MAX_IN_MEMORY_SOURCE_BYTES } from "./sourceFileLimits";
 // overhead low, small enough that peak memory stays bounded.
 const COPY_CHUNK_BYTES = 32 * 1024 * 1024;
 
-const OPFS_CACHE_DIR = "openscreen-source-cache";
+const OPFS_CACHE_DIR = "screenly-source-cache";
 
 export interface MaterializeProgress {
 	copiedBytes: number;

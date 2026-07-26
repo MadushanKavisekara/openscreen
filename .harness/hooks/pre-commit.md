@@ -4,7 +4,7 @@ event: pre-commit
 type: gate
 ---
 
-# Pre-commit gate for OpenScreen
+# Pre-commit gate for Screenly
 
 Runs on every `git commit` in this repo. Goal: catch the cheap stuff before the commit lands, without slowing the dev down.
 

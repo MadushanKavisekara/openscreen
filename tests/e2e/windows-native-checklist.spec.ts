@@ -13,7 +13,7 @@ const MAIN_JS = path.join(ROOT, "dist-electron/main.js");
 const TEST_VIDEO = path.join(__dirname, "../fixtures/sample.webm");
 
 async function launchApp() {
-	const testUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openscreen-e2e-"));
+	const testUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "screenly-e2e-"));
 	const app = await electron.launch({
 		args: [
 			MAIN_JS,
@@ -229,7 +229,7 @@ test.describe("Windows native checklist smoke tests", () => {
 			await hudWindow.waitForLoadState("domcontentloaded");
 			await dismissLanguagePrompt(hudWindow);
 			testVideoInRecordings = await copyFixtureToRecordings(app, "checklist-project-sample.webm");
-			projectPath = path.join(os.tmpdir(), `openscreen-checklist-${Date.now()}.openscreen`);
+			projectPath = path.join(os.tmpdir(), `screenly-checklist-${Date.now()}.screenly`);
 			const project = {
 				version: 2,
 				videoPath: testVideoInRecordings,
