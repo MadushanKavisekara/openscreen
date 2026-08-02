@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { BrowserWindow, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, screen } from "electron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -134,6 +134,17 @@ export function createHudOverlayWindow(): BrowserWindow {
 	// it was first opened on.
 	if (process.platform === "darwin") {
 		win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+		// With no editor open the app runs as an "accessory" process, and macOS
+		// gives those no menu bar — so the menu's ⌘Q never fires. Handle it on the
+		// window itself, which keeps the shortcut working whenever the recorder has
+		// focus without a globalShortcut that would shadow ⌘Q in every other app.
+		win.webContents.on("before-input-event", (event, input) => {
+			if (input.type !== "keyDown" || !input.meta || input.control || input.alt) return;
+			if (input.key.toLowerCase() !== "q") return;
+
+			event.preventDefault();
+			app.quit();
+		});
 	}
 
 	// Show only once painted to avoid the black rectangle flash when a transparent
