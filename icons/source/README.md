@@ -14,6 +14,7 @@ npm run icons:generate
 | `AppIcon.icon` | Icon Composer project. Compiled into a Liquid Glass asset catalog at package time. | Optional |
 | `AppIcon.icns` | Icon Composer → File → Export. The source of truth for every generated raster. | Yes (or `AppIcon.png`) |
 | `AppIcon.png` | Flat 1024×1024 fallback if there's no `.icns`. Converted to `.icns` locally. | Alternative |
+| `MenuBarIcon.svg` | The macOS menu bar mark. Flat white silhouette — see below. | Yes (macOS) |
 | `logo.svg` | Vector wordmark/mark used in the renderer UI. | — |
 
 ## What gets generated
@@ -25,8 +26,24 @@ npm run icons:generate
 - `icons/icons/win/icon.ico` — 16/24/32/48/64/128/256
 - `icons/icons/png/` — 16 through 1024, for `linux.icon`
 
-`public/screenly.png` (the menu bar icon) is authored separately and is **not** generated
-here — a scaled-down app icon reads as a blue blob at 16px.
+The menu bar icon is a separate pipeline, because a scaled-down app icon reads as a blue
+blob at 16px:
+
+```bash
+npm run icons:menubar
+```
+
+writes `public/screenlyTemplate.png` (16×16) and `public/screenlyTemplate@2x.png` (32×32)
+from `MenuBarIcon.svg`.
+
+These are macOS **template images**: the system draws them from their alpha channel alone,
+tinting for the light or dark menu bar and inverting while the menu is open. So the source
+is a flat white silhouette, and giving it a fixed colour would make it invisible in one of
+the two appearances. `electron/main.ts` marks them with `setTemplateImage(true)` and does
+not resize them — `nativeImage` picks the `@2x` file up from the same path.
+
+`public/screenly.png` is the colour mark the Windows and Linux trays use; those do no
+tinting of their own. It is authored by hand and **not** generated here.
 
 ## Liquid Glass on macOS 26
 
