@@ -54,6 +54,8 @@ import { computeFrameStepTime } from "@/lib/frameStep";
 import type { CursorCaptureMode, ProjectMedia } from "@/lib/recordingSession";
 import { isTextEditingTarget, matchesShortcut } from "@/lib/shortcuts";
 import {
+	type AutoZoomEngine,
+	getAutoZoomEngine,
 	getExportFolder,
 	getProjectFolder,
 	loadUserPreferences,
@@ -106,6 +108,7 @@ import {
 } from "./regionClipboard";
 import { findFreeGapAt } from "./regionPlacement";
 import { SettingsPanel } from "./SettingsPanel";
+import { type AutoZoomSample, planAutoZooms } from "./timeline/autoZoomPlanner";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
@@ -301,8 +304,11 @@ export default function VideoEditor() {
 	const cursorTelemetrySourcePath = videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : null);
 	const { samples: cursorTelemetry, error: cursorTelemetryError } =
 		useCursorTelemetry(cursorTelemetrySourcePath);
-	const { data: cursorRecordingData, error: cursorRecordingDataError } =
-		useCursorRecordingData(cursorTelemetrySourcePath);
+	const {
+		data: cursorRecordingData,
+		loading: cursorRecordingDataLoading,
+		error: cursorRecordingDataError,
+	} = useCursorRecordingData(cursorTelemetrySourcePath);
 	const cursorClickTimestamps = useMemo<number[]>(() => {
 		const recordingClicks =
 			cursorRecordingData?.samples
@@ -315,6 +321,21 @@ export default function VideoEditor() {
 		return cursorTelemetry
 			.filter((sample) => isClickInteractionType(sample.interactionType))
 			.map((sample) => sample.timeMs);
+	}, [cursorRecordingData, cursorTelemetry]);
+
+	// Which generator places automatic zooms. A preference, not project state: it describes
+	// how the editor works, not the contents of this recording, so it is not undoable.
+	const [autoZoomEngine, setAutoZoomEngine] = useState<AutoZoomEngine>(() => getAutoZoomEngine());
+
+	// Richest sample source available for auto-zoom planning. `getTelemetry` strips every
+	// field except timeMs/cx/cy (see readCursorTelemetryFile), so clicks, cursorType and
+	// visibility only survive on the recording-data path — which is what the v2 planner needs.
+	// The bare telemetry fallback keeps the planner working (dwell-only) for older recordings.
+	const autoZoomSamples = useMemo<AutoZoomSample[]>(() => {
+		if (cursorRecordingData?.samples?.length) {
+			return cursorRecordingData.samples;
+		}
+		return cursorTelemetry;
 	}, [cursorRecordingData, cursorTelemetry]);
 
 	// Cursor & motion blur visual settings (non-undoable preferences)
@@ -1189,34 +1210,88 @@ export default function VideoEditor() {
 		[selectedCameraFullscreenId, pushState],
 	);
 
-	// Builds fresh "auto" zoom regions from cursor telemetry without overlapping
-	// existing ones. Used by both the on-load auto-suggest pass and the wand toggle.
-	// These regions always follow the cursor for their whole span (focusMode "auto") —
-	// that's the entire point of an auto-placed zoom: it should pan to track the cursor
-	// as it moves, not freeze at the dwell point that triggered the suggestion. This is
-	// independent of the global "Auto Focus All" toggle, which only affects the default
-	// for manually-drawn zoom regions.
+	// Builds fresh "auto" zoom regions from cursor telemetry without overlapping existing
+	// ones. Used by the on-load auto-suggest pass, the wand toggle, and the engine switch.
+	//
+	// Two generators are selectable so they can be A/B'd on the same recording:
+	//   "v2"     — saliency + DP planner in autoZoomPlanner.ts. Region extents, depth and
+	//              anchor-vs-follow all come from the data.
+	//   "legacy" — the original greedy dwell picker. Fixed 5%-of-duration spans, one preset
+	//              depth, and focusMode "auto" on everything.
+	// Neither affects the global "Auto Focus All" toggle, which only sets the default for
+	// manually-drawn zoom regions.
+	//
+	// `engine` is an explicit parameter rather than a plain state read so the toggle handler
+	// can regenerate with the newly picked engine in the same tick, before state has settled.
 	const buildAutoZoomRegions = useCallback(
-		(existingRegions: ZoomRegion[]): ZoomRegion[] => {
+		(existingRegions: ZoomRegion[], engine: AutoZoomEngine = autoZoomEngine): ZoomRegion[] => {
 			const totalMs = Math.round(duration * 1000);
-			const suggestions = buildAutoZoomSuggestions({
-				cursorTelemetry,
+
+			if (engine === "legacy") {
+				const suggestions = buildAutoZoomSuggestions({
+					cursorTelemetry,
+					totalMs,
+					existingRegions,
+					defaultDurationMs: Math.max(1000, Math.round(totalMs * 0.05)),
+				});
+				return suggestions.map((suggestion) => ({
+					id: `zoom-${nextZoomIdRef.current++}`,
+					startMs: Math.round(suggestion.span.start),
+					endMs: Math.round(suggestion.span.end),
+					depth: DEFAULT_ZOOM_DEPTH,
+					customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
+					focus: clampFocusToDepth(suggestion.focus, DEFAULT_ZOOM_DEPTH),
+					focusMode: "auto" as const,
+					source: "auto" as const,
+				}));
+			}
+
+			const plan = planAutoZooms({
+				samples: autoZoomSamples,
 				totalMs,
 				existingRegions,
-				defaultDurationMs: Math.max(1000, Math.round(totalMs * 0.05)),
+				sourceHeight:
+					videoPlaybackRef.current?.video?.videoHeight || DEFAULT_SOURCE_DIMENSIONS.height,
 			});
-			return suggestions.map((suggestion) => ({
+			if (import.meta.env.DEV) {
+				console.debug(
+					"[auto-zoom v2]",
+					plan.map((region) => ({
+						at: `${(region.startMs / 1000).toFixed(1)}-${(region.endMs / 1000).toFixed(1)}s`,
+						scale: region.scale,
+						mode: region.focusMode,
+						why: region.reason,
+					})),
+				);
+			}
+			return plan.map((region) => ({
 				id: `zoom-${nextZoomIdRef.current++}`,
-				startMs: Math.round(suggestion.span.start),
-				endMs: Math.round(suggestion.span.end),
-				depth: DEFAULT_ZOOM_DEPTH,
-				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
-				focus: clampFocusToDepth(suggestion.focus, DEFAULT_ZOOM_DEPTH),
-				focusMode: "auto" as const,
+				startMs: region.startMs,
+				endMs: region.endMs,
+				depth: region.depth,
+				customScale: region.scale,
+				focus: clampFocusToDepth(region.focus, region.depth),
+				focusMode: region.focusMode,
 				source: "auto" as const,
 			}));
 		},
-		[cursorTelemetry, duration],
+		[autoZoomSamples, autoZoomEngine, cursorTelemetry, duration],
+	);
+
+	// Switching engine immediately reruns placement, so the toggle shows its effect on the
+	// current recording without the user having to cycle the wand. Only untouched auto
+	// regions are replaced — anything hand-edited has flipped to source "manual" and survives.
+	const handleAutoZoomEngineChange = useCallback(
+		(engine: AutoZoomEngine) => {
+			setAutoZoomEngine(engine);
+			saveUserPreferences({ autoZoomEngine: engine });
+			if (!autoZoomEnabled) return;
+			pushState((prev) => {
+				const kept = prev.zoomRegions.filter((region) => region.source !== "auto");
+				return { zoomRegions: [...kept, ...buildAutoZoomRegions(kept, engine)] };
+			});
+		},
+		[autoZoomEnabled, buildAutoZoomRegions, pushState],
 	);
 
 	// Auto-suggest zooms once per fresh recording (no existing zooms, telemetry
@@ -1226,7 +1301,11 @@ export default function VideoEditor() {
 	useEffect(() => {
 		if (!autoZoomEnabled || !cursorTelemetrySourcePath) return;
 		if (autoProcessedSourceRef.current === cursorTelemetrySourcePath) return;
-		if (cursorTelemetry.length < 2 || duration <= 0) return;
+		// Telemetry and recording data load from two separate IPC calls. Waiting for the
+		// richer one keeps the ref guard from marking this source processed off the bare
+		// telemetry, which would silently cost the planner its click signal for this video.
+		if (cursorRecordingDataLoading) return;
+		if (autoZoomSamples.length < 2 || duration <= 0) return;
 		// Only auto-suggest for a fresh recording; don't disturb existing zooms.
 		if (zoomRegions.length > 0) {
 			autoProcessedSourceRef.current = cursorTelemetrySourcePath;
@@ -1239,7 +1318,8 @@ export default function VideoEditor() {
 	}, [
 		autoZoomEnabled,
 		cursorTelemetrySourcePath,
-		cursorTelemetry,
+		autoZoomSamples,
+		cursorRecordingDataLoading,
 		duration,
 		zoomRegions,
 		buildAutoZoomRegions,
@@ -3365,6 +3445,8 @@ export default function VideoEditor() {
 									onZoomAdded={handleZoomAddedEdit}
 									autoZoomEnabled={autoZoomEnabled}
 									onToggleAutoZoom={handleToggleAutoZoom}
+									autoZoomEngine={autoZoomEngine}
+									onAutoZoomEngineChange={handleAutoZoomEngineChange}
 									autoFocusAll={autoFocusAll}
 									onToggleAutoFocusAll={handleToggleAutoFocusAll}
 									onZoomSpanChange={handleZoomSpanChangeEdit}
