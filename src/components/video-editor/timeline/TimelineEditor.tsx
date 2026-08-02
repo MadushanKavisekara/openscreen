@@ -4,6 +4,7 @@ import {
 	Captions,
 	Check,
 	ChevronDown,
+	FlaskConical,
 	Gauge,
 	Maximize,
 	MessageSquare,
@@ -27,6 +28,7 @@ import {
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { isTextEditingTarget, matchesShortcut } from "@/lib/shortcuts";
+import type { AutoZoomEngine } from "@/lib/userPreferences";
 import { cn } from "@/lib/utils";
 import { ASPECT_RATIOS, type AspectRatio, getAspectRatioLabel } from "@/utils/aspectRatioUtils";
 import { formatShortcut } from "@/utils/platformUtils";
@@ -67,6 +69,9 @@ interface TimelineEditorProps {
 	/** Magic-wand auto-zoom toggle state + handler. */
 	autoZoomEnabled?: boolean;
 	onToggleAutoZoom?: (enabled: boolean) => void;
+	/** Which generator places automatic zooms; switching regenerates them immediately. */
+	autoZoomEngine?: AutoZoomEngine;
+	onAutoZoomEngineChange?: (engine: AutoZoomEngine) => void;
 	/** Global Auto-Focus toggle state + handler. */
 	autoFocusAll?: boolean;
 	onToggleAutoFocusAll?: (on: boolean) => void;
@@ -1076,6 +1081,8 @@ export default function TimelineEditor({
 	onZoomAdded,
 	autoZoomEnabled = true,
 	onToggleAutoZoom,
+	autoZoomEngine = "v2",
+	onAutoZoomEngineChange,
 	autoFocusAll = false,
 	onToggleAutoFocusAll,
 	onZoomSpanChange,
@@ -1721,6 +1728,23 @@ export default function TimelineEditor({
 						title={autoZoomEnabled ? t("buttons.autoZoomOn") : t("buttons.autoZoomOff")}
 					>
 						<WandSparkles className="w-4 h-4" />
+					</Button>
+					<Button
+						onClick={() => onAutoZoomEngineChange?.(autoZoomEngine === "v2" ? "legacy" : "v2")}
+						variant="ghost"
+						size="icon"
+						aria-pressed={autoZoomEngine === "v2"}
+						className={cn(
+							"h-7 w-7 rounded-lg transition-all hover:bg-brand/10 hover:text-brand",
+							autoZoomEngine === "v2" ? "bg-brand/15 text-brand" : "text-slate-400",
+						)}
+						title={
+							autoZoomEngine === "v2"
+								? t("buttons.autoZoomEngineV2")
+								: t("buttons.autoZoomEngineLegacy")
+						}
+					>
+						<FlaskConical className="w-4 h-4" />
 					</Button>
 					<Button
 						onClick={() => onToggleAutoFocusAll?.(!autoFocusAll)}

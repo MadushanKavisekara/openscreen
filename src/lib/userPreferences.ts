@@ -37,7 +37,15 @@ export interface UserPreferences {
 	preferSoftwareEncoder: boolean;
 	/** Stop showing the notice that recording fell back to software encoding */
 	hideSoftwareEncoderFallbackNotice: boolean;
+	/**
+	 * Which generator places the automatic zoom regions on a fresh recording.
+	 * "v2" is the saliency/DP planner; "legacy" is the original greedy dwell picker.
+	 * Kept switchable so the two can be A/B'd on the same recording.
+	 */
+	autoZoomEngine: AutoZoomEngine;
 }
+
+export type AutoZoomEngine = "v2" | "legacy";
 
 export const DEFAULT_PREFS: UserPreferences = {
 	padding: DEFAULT_EDITOR_LAYOUT_SETTINGS.padding,
@@ -49,6 +57,7 @@ export const DEFAULT_PREFS: UserPreferences = {
 	trayLayout: "horizontal",
 	preferSoftwareEncoder: false,
 	hideSoftwareEncoderFallbackNotice: false,
+	autoZoomEngine: "v2",
 };
 
 /** Parses stored preferences without throwing on malformed JSON. */
@@ -113,7 +122,16 @@ export function loadUserPreferences(): UserPreferences {
 			typeof raw.hideSoftwareEncoderFallbackNotice === "boolean"
 				? raw.hideSoftwareEncoderFallbackNotice
 				: DEFAULT_PREFS.hideSoftwareEncoderFallbackNotice,
+		autoZoomEngine:
+			raw.autoZoomEngine === "v2" || raw.autoZoomEngine === "legacy"
+				? raw.autoZoomEngine
+				: DEFAULT_PREFS.autoZoomEngine,
 	};
+}
+
+/** Which auto-zoom generator is active. See UserPreferences.autoZoomEngine. */
+export function getAutoZoomEngine(): AutoZoomEngine {
+	return loadUserPreferences().autoZoomEngine;
 }
 
 /**
