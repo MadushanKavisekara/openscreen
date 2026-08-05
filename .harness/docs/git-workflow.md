@@ -41,7 +41,7 @@ All five must be green before merge. Native helper code is NOT covered by CI —
 
 ## Release flow
 
-Two `workflow_dispatch` workflows cut a release. Trunk-based on `main`, but **release branches freeze the RC codebase between cut and promote** (see § Release branches below). Both require the `SCREENLY_RELEASE_TOKEN` secret — see `docs/secrets.md`.
+Two `workflow_dispatch` workflows cut a release. Trunk-based on `main`, but **release branches freeze the RC codebase between cut and promote** (see § Release branches below). Both require the `SCREENLY_RELEASE_TOKEN` secret — see `docs/operations/secrets.md`.
 
 ### Step 1: cut a release candidate
 

@@ -1,18 +1,16 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Dependencies
+node_modules/
 
-node_modules
-dist
-dist-electron
-dist-ssr
+# Logs
+logs/
+*.log
+
+# Build output
+/dist/
+/dist-electron/
+/dist-ssr/
+/release/
 *.local
-.env
 
 # Native helper build outputs
 /electron/native/wgc-capture/build/
@@ -21,49 +19,44 @@ dist-ssr
 /electron/native/screencapturekit/.swiftpm/
 /electron/native/bin/
 
-# Native macOS generated files
+# Xcode
 DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Editor directories and files
-.vscode/*
-.zed/
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
+# Visual Studio (Windows native helper)
 *.sln
-*.sw?
-release/**
-*.kiro/
-.claude/
-# npx electron-builder --mac --win
+*.suo
+*.njsproj
+*.ntvs*
 
-# Playwright
-test-results
+# Auto-caption model + ORT wasm — downloaded by scripts/fetch-caption-model.mjs
+/caption-assets/
+
+# Secrets
+.env
+
+# Test output
+test-results/
 playwright-report/
-
-
-# Vitest browser mode screenshots
 __screenshots__/
 .vitest-attachments/
 
-# shell files
-/shell.sh
 # Nix
 result
 result-*
 .direnv/
 
-#kilocode
+# Agent / editor working directories
+.claude/
+.worktrees/
 .kilo/
+*.kiro/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.zed/
 
-#others
-
-**/*.import
-
-# Auto-caption model + ORT wasm — regenerated at build by scripts/fetch-caption-model.mjs
-/caption-assets/
+# OS / misc
+.DS_Store
+*.sw?

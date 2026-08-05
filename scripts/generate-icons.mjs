@@ -8,9 +8,9 @@
  *   2. icons/source/AppIcon.png   — a flat 1024x1024 master, converted to .icns here
  *
  * Outputs:
- *   icons/icons/mac/icon.icns   macOS (electron-builder mac.icon)
- *   icons/icons/win/icon.ico    Windows (electron-builder win.icon)
- *   icons/icons/png/<n>x<n>.png Linux (electron-builder linux.icon)
+ *   icons/generated/mac/icon.icns   macOS (electron-builder mac.icon)
+ *   icons/generated/win/icon.ico    Windows (electron-builder win.icon)
+ *   icons/generated/png/<n>x<n>.png Linux (electron-builder linux.icon)
  *
  * public/screenly.png is deliberately not generated here — the menu bar needs its own
  * minimal mark, not a scaled-down app icon.
@@ -31,9 +31,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_DIR = path.join(ROOT, "icons", "source");
-const MAC_DIR = path.join(ROOT, "icons", "icons", "mac");
-const WIN_DIR = path.join(ROOT, "icons", "icons", "win");
-const PNG_DIR = path.join(ROOT, "icons", "icons", "png");
+const MAC_DIR = path.join(ROOT, "icons", "generated", "mac");
+const WIN_DIR = path.join(ROOT, "icons", "generated", "win");
+const PNG_DIR = path.join(ROOT, "icons", "generated", "png");
 
 /** Sizes electron-builder expects under linux.icon. */
 const PNG_SIZES = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
