@@ -1,6 +1,6 @@
 # Icon sources
 
-Authored icon artwork lives here. Everything under `icons/icons/` is **generated** from
+Authored icon artwork lives here. Everything under `icons/generated/` is **generated** from
 these files — edit the sources, then regenerate:
 
 ```bash
@@ -21,10 +21,10 @@ npm run icons:generate
 
 `npm run icons:generate` (macOS only — it uses `sips` and `iconutil`) writes:
 
-- `icons/icons/mac/icon.icns` — copied verbatim from `AppIcon.icns` so Apple's own
+- `icons/generated/mac/icon.icns` — copied verbatim from `AppIcon.icns` so Apple's own
   representations survive
-- `icons/icons/win/icon.ico` — 16/24/32/48/64/128/256
-- `icons/icons/png/` — 16 through 1024, for `linux.icon`
+- `icons/generated/win/icon.ico` — 16/24/32/48/64/128/256
+- `icons/generated/png/` — 16 through 1024, for `linux.icon`
 
 The menu bar icon is a separate pipeline, because a scaled-down app icon reads as a blue
 blob at 16px:

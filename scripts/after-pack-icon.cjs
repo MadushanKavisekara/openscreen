@@ -11,7 +11,7 @@
 //   - no actool (Command Line Tools only) -> skip with a note
 //   - actool present but fails            -> warn, keep going
 // In every skip path the build still succeeds and macOS falls back to
-// icons/icons/mac/icon.icns, which stays wired up as mac.icon. Nothing here is
+// icons/generated/mac/icon.icns, which stays wired up as mac.icon. Nothing here is
 // load-bearing; it only ever upgrades the icon.
 //
 // Runs before code signing, so anything written into the bundle gets signed with it.

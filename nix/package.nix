@@ -81,7 +81,7 @@ buildNpmPackage {
 
     # Install icons to hicolor theme
     for size in 16 24 32 48 64 128 256 512 1024; do
-      icon="icons/icons/png/''${size}x''${size}.png"
+      icon="icons/generated/png/''${size}x''${size}.png"
       if [ -f "$icon" ]; then
         install -Dm644 "$icon" \
           "$out/share/icons/hicolor/''${size}x''${size}/apps/screenly.png"

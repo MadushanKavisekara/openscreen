@@ -61,7 +61,7 @@
         "arch": ["x64", "arm64"]
       }
     ],
-    "icon": "icons/icons/mac/icon.icns",
+    "icon": "icons/generated/mac/icon.icns",
     "artifactName": "${productName}-Mac-${arch}-${version}-Installer.${ext}",
     "extraResources": [
       {
@@ -84,7 +84,7 @@
       "deb",
       "pacman"
     ],
-    "icon": "icons/icons/png",
+    "icon": "icons/generated/png",
     "artifactName": "${productName}-Linux-${version}.${ext}",
     "maintainer": "Etienne Lescot <etiennelescot@gmail.com>",
     "category": "AudioVideo"
@@ -93,7 +93,7 @@
     "target": [
       "nsis"
     ],
-    "icon": "icons/icons/win/icon.ico",
+    "icon": "icons/generated/win/icon.ico",
     "artifactName": "${productName}.Setup.${version}.${ext}",
     "extraResources": [
       {

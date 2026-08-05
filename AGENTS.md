@@ -20,11 +20,13 @@ Screenly is a free, open-source screen recorder and video editor (Electron + Rea
 - `src/` — React app: UI, editor components, timeline, i18n, captioning/cursor/exporter libs
 - `electron/` — main process, IPC, recording orchestration
 - `electron/native/` — **native** capture helpers: `screencapturekit/` (Swift, macOS) and `wgc-capture/` (C++/Win32, Windows). These are built and shipped with the app, not loaded from npm
-- `docs/` — architecture, engineering roadmaps, testing guides
+- `docs/` — `architecture/`, `engineering/` (roadmaps), `testing/` (test guides + checklists), `operations/` (CI, release, secrets)
 - `tests/` — Playwright e2e specs + fixtures
-- `scripts/` — native build scripts, diagnostic tools
+- `scripts/` — native build scripts, icon generation, diagnostic tools
+- `public/` — renderer-served static assets: cursors, wallpapers, tray images
+- `icons/` — app icon pipeline: `source/` is authored artwork, `generated/` is produced by `npm run icons:generate` (never hand-edited)
 - `nix/`, `flake.nix` — Linux packaging
-- `release/`, `dist-electron/` — build artifacts (gitignored)
+- `dist/`, `dist-electron/`, `release/`, `caption-assets/` — build artifacts and downloaded models (all gitignored, all regenerable)
 
 ## Code style
 
@@ -91,7 +93,7 @@ Two `workflow_dispatch` workflows cut a release with a pre-release candidate (RC
 - **Promote RC**: Actions → "Promote RC to stable release" → Run workflow. Input: `rc_tag` (e.g. `v1.5.0-rc.2`), optional `release_notes_extra`. Closes the `vX.Y.Z` milestone, strips `-rc.N` from `package.json`, pushes `vX.Y.Z` tag, which triggers `build.yml` to publish a stable release (full notarization, Tier 3 homebrew/winget/nix/aur fires). Notifies `#announcements` on Discord.
 - **Manual fallback**: `git tag vX.Y.Z-rc.N <sha> && git push origin vX.Y.Z-rc.N` does the same as Cut RC (minus the milestone migration and Discord announce) — useful for emergency cuts.
 
-Both workflows require the `SCREENLY_RELEASE_TOKEN` secret (a fine-grained PAT with `contents: write` + `issues: write`). This is the standard fix for `release: published` not triggering downstream workflows when the release is created by `GITHUB_TOKEN`. See `docs/secrets.md`.
+Both workflows require the `SCREENLY_RELEASE_TOKEN` secret (a fine-grained PAT with `contents: write` + `issues: write`). This is the standard fix for `release: published` not triggering downstream workflows when the release is created by `GITHUB_TOKEN`. See `docs/operations/secrets.md`.
 
 **Release branches freeze the build between cut and promote.** Every RC cut creates `release/vX.Y.Z-rc.N`. The branch is *not* merged into `main` until the stable tag is published; only cherry-picks of bugfixes land on the release branch during the RC window. The stable tag points at the branch tip (RC + cherry-picks), then `promote.yml` opens a `release/vX.Y.Z-sync → main` PR to bring main into line. This contract exists because of the v1.6.0 incident (2026-07-05) where the original promote workflow tagged `main` instead of the RC snapshot, causing 23 unreleased commits to ship in `v1.6.0`. Full rules in `.harness/docs/git-workflow.md` § Release branches.
 

@@ -152,7 +152,7 @@ This works because `build.yml` is triggered by any tag matching `v*`. It skips m
 
 ### Why a fine-grained PAT (`SCREENLY_RELEASE_TOKEN`)?
 
-`GITHUB_TOKEN` cannot trigger downstream workflows from the actions it performs. Specifically, `gh release create` using `GITHUB_TOKEN` does **not** fire the `release: published` event, so homebrew/winget/nix/aur would silently skip every release. The fine-grained PAT (scoped to `MadushanKavisekara/screenly` with `contents: write` + `issues: write`) is the standard fix. See `docs/secrets.md` for creation and rotation instructions.
+`GITHUB_TOKEN` cannot trigger downstream workflows from the actions it performs. Specifically, `gh release create` using `GITHUB_TOKEN` does **not** fire the `release: published` event, so homebrew/winget/nix/aur would silently skip every release. The fine-grained PAT (scoped to `MadushanKavisekara/screenly` with `contents: write` + `issues: write`) is the standard fix. See `docs/operations/secrets.md` for creation and rotation instructions.
 
 ## Tier 3: Package registries
 
